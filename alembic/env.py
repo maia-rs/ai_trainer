@@ -21,6 +21,16 @@ if config.config_file_name is not None:
 from app.core.database import Base
 target_metadata = Base.metadata
 
+# Importa todos os modelos para que o Alembic possa detectá-los
+# Certifique-se de que todos os seus modelos (e.g., Usuario, Exercicio, etc.)
+# são importados aqui ou em um módulo que é importado aqui.
+from app.models import usuario  # Descomentar e garantir que o modelo Usuario seja carregado
+from app.models import exercico # Importar o novo modelo Exercico
+
+# Importa a configuração da aplicação para obter a URL do banco de dados
+from app.core import config as app_config
+config.set_main_option("sqlalchemy.url", app_config.DB_URL)
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")

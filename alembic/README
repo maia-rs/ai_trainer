@@ -1,1 +1,72 @@
-Generic single-database configuration.
+Configuracao do Alembic para banco unico.
+
+Passo a passo para futuras migracoes
+
+1) Ative o ambiente virtual
+
+```bash
+source venv/bin/activate
+```
+
+2) Confira se o banco esta atualizado com a ultima revisao
+
+```bash
+./venv/bin/alembic current
+./venv/bin/alembic heads
+```
+
+Se `current` for diferente de `heads`, aplique antes:
+
+```bash
+./venv/bin/alembic upgrade head
+```
+
+3) Gere uma nova migracao depois de alterar modelos
+
+```bash
+./venv/bin/alembic revision --autogenerate -m "descricao_da_mudanca"
+```
+
+4) Revise o arquivo gerado em `alembic/versions/`
+
+- Verifique se o `upgrade()` faz apenas o que voce espera.
+- Verifique se o `downgrade()` desfaz corretamente.
+
+5) Aplique a migracao
+
+```bash
+./venv/bin/alembic upgrade head
+```
+
+6) Validacao final
+
+```bash
+./venv/bin/alembic current
+./venv/bin/alembic history --verbose
+```
+
+Comandos uteis
+
+```bash
+# Mostrar revisao atual no banco
+./venv/bin/alembic current
+
+# Mostrar head local
+./venv/bin/alembic heads
+
+# Ver historico completo
+./venv/bin/alembic history --verbose
+
+# Voltar uma revisao
+./venv/bin/alembic downgrade -1
+
+# Ir para uma revisao especifica
+./venv/bin/alembic upgrade <revision_id>
+```
+
+Erros comuns
+
+- `Target database is not up to date`:
+	o banco nao esta na revisao mais recente. Rode `./venv/bin/alembic upgrade head` e tente novamente.
+- Migracao autogerada vazia:
+	normalmente indica que nao ha diferencas entre modelos e banco.
