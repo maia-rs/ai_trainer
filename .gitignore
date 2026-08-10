@@ -1,0 +1,26 @@
+# Ignorar arquivos de ambiente
+# Ignorar arquivos de ambiente
+.env
+
+# Virtual environment
+venv/
+env/
+
+# Byte-code files
+*.pyc
+__pycache__/
+
+# IDE-specific files
+.idea/
+.vscode/
+
+# Database files (if using SQLite for development)
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic migration scripts (generated)
+alembic/versions/
+
+# Logs
+*.log
