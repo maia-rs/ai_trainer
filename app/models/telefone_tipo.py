@@ -74,3 +74,4 @@ if __name__ == "__main__":
     # Exemplo de uso:
     meu_tel = TelefoneValue("11999998888")
     print(meu_tel)  # Saída: (11) 99999-8888
+S

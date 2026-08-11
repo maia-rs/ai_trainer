@@ -25,8 +25,11 @@ target_metadata = Base.metadata
 # Certifique-se de que todos os seus modelos (e.g., Usuario, Exercicio, etc.)
 # são importados aqui ou em um módulo que é importado aqui.
 from app.models import usuario  # Descomentar e garantir que o modelo Usuario seja carregado
-from app.models import exercico # Importar o novo modelo Exercico
-
+from app.models import exercicio # Importar o novo modelo Exercico
+from app.models import treino # Importar o novo modelo Treino
+from app.models import treino_exercicio # Importar o novo modelo TreinoExercicio
+from app.models import execucao # Importar o novo modelo Execucao
+from app.models import avaliacao_fisica # Importar o novo modelo AvaliacaoFisica
 # Importa a configuração da aplicação para obter a URL do banco de dados
 from app.core import config as app_config
 config.set_main_option("sqlalchemy.url", app_config.DB_URL)
