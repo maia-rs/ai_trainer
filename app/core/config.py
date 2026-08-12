@@ -1,18 +1,22 @@
 import os
 import dotenv
-import mysql.connector
 """Configura as variáveis de ambiente do projeto."""
 
 dotenv.load_dotenv()
 
-#Banco de dados Mysql
+# Banco de dados: usa DB_URL quando definido, senao monta URL de MySQL.
+DB_URL = os.getenv("DB_URL")
+
 DB_HOST = os.getenv("DB_HOST")
-DB_PORT = int(os.getenv("DB_PORT"))
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-DB_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if not DB_URL:
+    DB_URL = (
+        f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
 
 
 if __name__ == "__main__":
