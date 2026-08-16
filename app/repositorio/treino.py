@@ -47,6 +47,14 @@ class TreinoRepositorio:
         result = self.session.execute(stmt).scalars().all()
         return result
 
+    def obter_treino_por_dia(self, dia_da_semana: str) -> Treino | None:
+        """Obtém o primeiro treino ativo para um determinado dia da semana."""
+        stmt = select(Treino).where(
+            Treino.dia_da_semana == dia_da_semana,
+            Treino.status == StatusTreino.ATIVO.value,
+        ).order_by(Treino.created_at.asc())
+        return self.session.execute(stmt).scalars().first()
+
     def atualizar_treino(self, treino: Treino) -> Treino:
         """Atualiza um treino existente no banco de dados."""
         self.session.commit()

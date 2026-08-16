@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
+from app.schemas.base import AppResponseSchema
 
 
 
@@ -35,7 +36,7 @@ class AvaliacaoFisicaUpdate(BaseModel):
     taxa_metabolica_basal: float | None = Field(None, description="Taxa metabólica basal em kcal")
     observacoes: str | None = Field(None, description="Observações adicionais sobre a avaliação física")
 
-class AvaliacaoFisicaResponse(BaseModel):
+class AvaliacaoFisicaResponse(AppResponseSchema):
     """Esquema para resposta de uma avaliação física."""
     
     id: str = Field(..., description="ID da avaliação física")
@@ -51,8 +52,5 @@ class AvaliacaoFisicaResponse(BaseModel):
     agua_corporal: float = Field(..., description="Água corporal em Litros")
     taxa_metabolica_basal: float = Field(..., description="Taxa metabólica basal em kcal")
     observacoes: str | None = Field(None, description="Observações adicionais sobre a avaliação física")
-    created_at: datetime = Field(..., description="Data de criação da avaliação física") # Alterado de str para datetime
-    updated_at: datetime = Field(..., description="Data da última atualização da avaliação física") # Alterado de str para datetime
-
-    class Config:
-        orm_mode = True
+    created_at: datetime = Field(..., description="Data de criação da avaliação física")
+    updated_at: datetime = Field(..., description="Data da última atualização da avaliação física")

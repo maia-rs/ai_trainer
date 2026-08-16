@@ -2,7 +2,7 @@ from uuid import uuid4
 from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Execucao(Base):
@@ -11,7 +11,7 @@ class Execucao(Base):
     __tablename__ = "execucoes"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     treino_exercicio_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    data_execucao: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    data_execucao: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     carga: Mapped[int] = mapped_column(Integer, nullable=False)  # Carga utilizada na execução
     series_realizadas: Mapped[int] = mapped_column(Integer, nullable=False)
     repeticoes_realizadas: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -20,5 +20,5 @@ class Execucao(Base):
     calorias_queimadas: Mapped[int] = mapped_column(Integer, nullable=False)  # Calorias queimadas durante a execução
     frequencia_cardiaca_media: Mapped[int] = mapped_column(Integer, nullable=False)  # Frequência cardíaca média durante a execução
     observacoes: Mapped[str] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

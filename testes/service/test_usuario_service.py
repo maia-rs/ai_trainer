@@ -2,7 +2,7 @@ import pytest
 
 from app.models.usuario import Usuario
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
-from app.service.usuario_sevice import UsuarioService
+from app.service.usuario_service import UsuarioService
 
 
 def test_criar_usuario_com_sucesso(db_session):

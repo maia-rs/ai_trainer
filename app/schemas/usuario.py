@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
+from app.schemas.base import AppResponseSchema
 from app.tipos.telefone_tipo import TelefoneValue
 
 
@@ -37,17 +38,15 @@ class UsuarioUpdate(BaseModel):
             return None
         return _validar_e_formatar_telefone(value)
 
-class UsuarioResponse(BaseModel):
+class UsuarioResponse(AppResponseSchema):
     """Esquema para resposta de um usuário."""
     
     id: str = Field(..., description="ID do usuário")
     name: str = Field(..., max_length=100, description="Nome do usuário")
     telefone: str = Field(..., max_length=15, description="Telefone do usuário no formato (XX) XXXXX-XXXX")
     status: str = Field(..., max_length=10, description="Status do usuário (ativo ou inativo)")
-    created_at: str = Field(..., description="Data de criação do usuário")
-    updated_at: str = Field(..., description="Data da última atualização do usuário")
-
-    model_config = ConfigDict(from_attributes=True)
+    created_at: datetime = Field(..., description="Data de criação do usuário")
+    updated_at: datetime = Field(..., description="Data da última atualização do usuário")
 
     @field_validator("telefone", mode="before")
     @classmethod

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
+from app.schemas.base import AppResponseSchema
 
 class TreinoExercicioCreate(BaseModel):
     """Esquema para criação de um treino_exercicio."""
@@ -19,7 +20,7 @@ class TreinoExercicioUpdate(BaseModel):
     descanso: int | None = Field(None, description="Tempo de descanso entre as séries do exercício no treino (em segundos)")
     observacoes: str | None = Field(None, description="Observações adicionais sobre o treino_exercicio")
 
-class TreinoExercicioResponse(BaseModel):
+class TreinoExercicioResponse(AppResponseSchema):
     """Esquema para resposta de um treino_exercicio."""
     
     id: str = Field(..., description="ID do treino_exercicio")
@@ -29,8 +30,5 @@ class TreinoExercicioResponse(BaseModel):
     repeticoes: int = Field(..., description="Número de repetições do exercício no treino")
     descanso: int = Field(..., description="Tempo de descanso entre as séries do exercício no treino (em segundos)")
     observacoes: str | None = Field(None, description="Observações adicionais sobre o treino_exercicio")
-    created_at: datetime = Field(..., description="Data de criação do treino_exercicio") # Alterado de str para datetime
-    updated_at: datetime = Field(..., description="Data da última atualização do treino_exercicio") # Alterado de str para datetime
-
-    class Config:
-        orm_mode = True
+    created_at: datetime = Field(..., description="Data de criação do treino_exercicio")
+    updated_at: datetime = Field(..., description="Data da última atualização do treino_exercicio")

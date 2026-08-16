@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from app.schemas.base import AppResponseSchema
 
 
 class ExercicioCreate(BaseModel):
@@ -29,7 +31,7 @@ class ExercicioUpdate(BaseModel):
     status: str | None = Field(None, max_length=10, description="Status do exercício (ativo ou inativo)")
 
 
-class ExercicioResponse(BaseModel):
+class ExercicioResponse(AppResponseSchema):
     """Esquema para resposta de um exercício."""
 
     id: str = Field(..., description="ID do exercício")
@@ -44,5 +46,3 @@ class ExercicioResponse(BaseModel):
     status: str = Field(..., max_length=10, description="Status do exercício (ativo ou inativo)")
     created_at: datetime = Field(..., description="Data de criação do exercício")
     updated_at: datetime = Field(..., description="Data da última atualização do exercício")
-
-    model_config = ConfigDict(from_attributes=True)

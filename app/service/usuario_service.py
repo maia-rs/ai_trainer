@@ -1,5 +1,5 @@
 from app.core.database import SessionLocal
-from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
+from app.schemas.usuario import UsuarioCreate, UsuarioUpdate,UsuarioResponse
 from app.repositorio.usuario import UsuarioRepositorio
 from app.models.usuario import Usuario, StatusUsuario
 from app.tipos.telefone_tipo import TelefoneValue
@@ -11,7 +11,7 @@ class UsuarioService:
     def __init__(self, session: Session):
         self.usuario_repositorio = UsuarioRepositorio(session)
 
-    def criar_usuario(self, usuario_create: UsuarioCreate) -> Usuario:
+    def criar_usuario(self, usuario_create: UsuarioCreate) -> UsuarioResponse:
         """Cria um novo usuário."""
         dados = usuario_create.model_dump()
         dados["telefone"] = TelefoneValue(dados["telefone"])
@@ -21,17 +21,19 @@ class UsuarioService:
         if existing_usuario:
             raise ValueError("Telefone já cadastrado.")
         else:
-            return self.usuario_repositorio.criar_usuario(usuario)
+            return UsuarioResponse.model_validate(self.usuario_repositorio.criar_usuario(usuario))
 
-    def obter_usuario_por_id(self, usuario_id: str) -> Usuario | None:
+    def obter_usuario_por_id(self, usuario_id: str) -> UsuarioResponse | None:
         """Obtém um usuário pelo ID."""
-        return self.usuario_repositorio.obter_usuario_por_id(usuario_id)
+        usuario = self.usuario_repositorio.obter_usuario_por_id(usuario_id)
+        return UsuarioResponse.model_validate(usuario) if usuario else None
 
-    def obter_usuario_por_telefone(self, telefone: str) -> Usuario | None:
+    def obter_usuario_por_telefone(self, telefone: str) -> UsuarioResponse | None:
         """Obtém um usuário pelo telefone."""
-        return self.usuario_repositorio.obter_usuario_por_telefone(telefone)
+        usuario = self.usuario_repositorio.obter_usuario_por_telefone(telefone)
+        return UsuarioResponse.model_validate(usuario) if usuario else None
 
-    def atualizar_usuario(self, usuario_id: str, usuario_update: UsuarioUpdate) -> Usuario | None:
+    def atualizar_usuario(self, usuario_id: str, usuario_update: UsuarioUpdate) -> UsuarioResponse | None:
         """Atualiza um usuário existente."""
         usuario = self.usuario_repositorio.obter_usuario_por_id(usuario_id)
         if not usuario:
@@ -47,15 +49,15 @@ class UsuarioService:
                 continue
             setattr(usuario, key, value)
 
-        return self.usuario_repositorio.atualizar_usuario(usuario)
+        return UsuarioResponse.model_validate(self.usuario_repositorio.atualizar_usuario(usuario))
 
-    def desativar_usuario(self, usuario_id: str) -> Usuario | None:
+    def desativar_usuario(self, usuario_id: str) -> UsuarioResponse | None:
         """Desativa um usuário existente."""
         usuario = self.usuario_repositorio.obter_usuario_por_id(usuario_id)
         if not usuario:
             return None
         usuario.status = StatusUsuario.INATIVO.value
-        return self.usuario_repositorio.atualizar_usuario(usuario)
+        return UsuarioResponse.model_validate(self.usuario_repositorio.atualizar_usuario(usuario))
 
     def deletar_usuario(self, usuario_id: str) -> bool:
         """Deleta um usuário pelo ID."""
@@ -65,4 +67,21 @@ class UsuarioService:
         self.usuario_repositorio.deletar_usuario(usuario)
         return True
 
-    
+
+if __name__ == "__main__":
+    # Teste local: cria o usuário caso ainda não exista.
+    with SessionLocal() as session:
+        usuario_service = UsuarioService(session)
+        novo_usuario = UsuarioCreate(
+            name="Rodrigo Maia",
+            telefone="11999999999"
+        )
+
+        usuario = usuario_service.obter_usuario_por_id("ea9b6645-18a7-4064-bda4-d91076645bcc")  
+        if usuario:
+            print("Usuário já existe:")
+            print(usuario.model_dump_json(indent=2))
+        else:
+            criado = usuario_service.criar_usuario(novo_usuario)
+            print("Usuário criado:")
+            print(criado.model_dump_json(indent=2))

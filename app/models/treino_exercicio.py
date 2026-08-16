@@ -2,7 +2,7 @@ from uuid import uuid4
 from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class TreinoExercicio(Base):
@@ -17,6 +17,6 @@ class TreinoExercicio(Base):
     repeticoes: Mapped[int] = mapped_column(Integer, nullable=False)
     tempo_descanso: Mapped[int] = mapped_column(Integer, nullable=False)  # Tempo de descanso em segundos
     observacoes: Mapped[str] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.execucao import Execucao
+from app.models.treino_exercicio import TreinoExercicio
 
 
 
@@ -53,6 +54,30 @@ class ExecucaoRepositorio:
 
     def obter_historico_execucoes_por_exercicio(self, exercicio_id: str) -> list[Execucao]:
         """Obtém o histórico de execuções de um exercício específico."""
-        stmt = select(Execucao).where(Execucao.exercicio_id == exercicio_id).order_by(Execucao.data_execucao.desc())
+        stmt = select(Execucao).join(TreinoExercicio, Execucao.treino_exercicio_id == TreinoExercicio.id).where(
+            TreinoExercicio.exercicio_id == exercicio_id
+        ).order_by(Execucao.data_execucao.desc())
         result = self.session.execute(stmt).scalars().all()
         return result
+
+    def obter_execucoes_por_periodo(self, data_inicio, data_fim) -> list[Execucao]:
+        """Obtém execuções dentro de um intervalo de datas."""
+        stmt = select(Execucao).where(
+            Execucao.data_execucao >= data_inicio,
+            Execucao.data_execucao <= data_fim,
+        ).order_by(Execucao.data_execucao.asc())
+        return self.session.execute(stmt).scalars().all()
+
+    def obter_execucoes_por_exercicio_e_periodo(self, exercicio_id: str, data_inicio, data_fim) -> list[Execucao]:
+        """Obtém execuções de um exercício específico dentro de um intervalo de datas."""
+        stmt = select(Execucao).join(TreinoExercicio, Execucao.treino_exercicio_id == TreinoExercicio.id).where(
+            TreinoExercicio.exercicio_id == exercicio_id,
+            Execucao.data_execucao >= data_inicio,
+            Execucao.data_execucao <= data_fim,
+        ).order_by(Execucao.data_execucao.asc())
+        return self.session.execute(stmt).scalars().all()
+
+    def obter_ultimas_execucoes(self, limite: int = 10) -> list[Execucao]:
+        """Obtém as execuções mais recentes."""
+        stmt = select(Execucao).order_by(Execucao.data_execucao.desc()).limit(limite)
+        return self.session.execute(stmt).scalars().all()
