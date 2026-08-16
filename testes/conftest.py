@@ -35,6 +35,11 @@ TestingSessionLocal = sessionmaker(
 
 
 @pytest.fixture
+def db_session_factory():
+    return TestingSessionLocal
+
+
+@pytest.fixture
 def db_session():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
