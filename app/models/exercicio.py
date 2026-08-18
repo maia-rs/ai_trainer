@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from datetime import datetime, timezone
@@ -24,7 +24,7 @@ class Exercicio(Base):
     rotulo: Mapped[str] = mapped_column(String(100), nullable=False)
     grupo_muscular: Mapped[str] = mapped_column(String(50), nullable=False)
     equipamento: Mapped[str] = mapped_column(String(50), nullable=False)
-    instrucao: Mapped[str] = mapped_column(String(500), nullable=False)
+    instrucao: Mapped[str] = mapped_column(Text, nullable=False)
     gif_url: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=StatusExercicio.ATIVO.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

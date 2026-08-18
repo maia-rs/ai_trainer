@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
 from app.models.exercicio import Exercicio, StatusExercicio
@@ -36,12 +36,26 @@ class ExercicioRepositorio:
         grupo_muscular: str | None = None,
         limite: int = 10,
     ) -> list[Exercicio]:
-        """Busca exercícios ativos com base em critérios opcionais."""
+        """Busca exercícios ativos com base em critérios opcionais.
 
+        Quando `nome` é informado, a busca é feita em todos os campos textuais
+        (nome em inglês, categoria, rótulo, grupo muscular e equipamento em PT-BR)
+        usando OR — permitindo que o usuário pesquise tanto em inglês quanto em
+        português sem necessidade de tradução prévia.
+        """
         stmt = select(Exercicio).where(Exercicio.status == StatusExercicio.ATIVO.value)
 
         if nome:
-            stmt = stmt.where(Exercicio.nome.ilike(f"%{nome}%"))
+            termo = f"%{nome}%"
+            stmt = stmt.where(
+                or_(
+                    Exercicio.nome.ilike(termo),
+                    Exercicio.categoria.ilike(termo),
+                    Exercicio.rotulo.ilike(termo),
+                    Exercicio.grupo_muscular.ilike(termo),
+                    Exercicio.equipamento.ilike(termo),
+                )
+            )
 
         if categoria:
             stmt = stmt.where(Exercicio.categoria.ilike(f"%{categoria}%"))

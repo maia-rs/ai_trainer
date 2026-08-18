@@ -6,30 +6,25 @@ from app.service.exercicio_service import ExercicioService
 
 @tool
 def buscar_informacoes_exercicio(consulta: str, limite: int = 5) -> dict:
-    """Busca informacoes de exercicios no catalogo interno."""
+    """Busca exercicios no catalogo interno por nome (em ingles ou portugues),
+    categoria, rotulo, grupo muscular ou equipamento.
 
+    Exemplos de consultas validas:
+      - "agachamento" ou "squat"
+      - "peito" ou "chest"
+      - "halter" ou "dumbbell"
+      - "quadriceps"
+    """
     session = SessionLocal()
 
     try:
         exercicio_service = ExercicioService(session)
 
         try:
-            limite_consulta = max(limite, 1)
             resultados = exercicio_service.search_exercicios(
                 nome=consulta,
-                limite=limite_consulta,
+                limite=max(limite, 1),
             )
-
-            if not resultados:
-                resultados = exercicio_service.search_exercicios(
-                    categoria=consulta,
-                    limite=limite_consulta,
-                )
-            if not resultados:
-                resultados = exercicio_service.search_exercicios(
-                    grupo_muscular=consulta,
-                    limite=limite_consulta,
-                )
 
             if not resultados:
                 return {"message": "Nenhum exercicio encontrado para a consulta informada."}
