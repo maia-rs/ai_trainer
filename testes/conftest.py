@@ -17,7 +17,7 @@ os.environ.setdefault("DB_URL", "sqlite:///./testes/test.db")
 from app.core.database import Base
 
 # Importa modelos para registrar tabelas no metadata.
-from app.models import avaliacao_fisica, execucao, exercicio, treino, treino_exercicio, usuario
+from app.models import avaliacao_fisica, dashboard_token, execucao, exercicio, treino, treino_exercicio, usuario
 
 TEST_DB_PATH = Path(__file__).resolve().parent / "test.db"
 TEST_DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"

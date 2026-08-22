@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.database import get_db
 from app.main import app
+from app.models.dashboard_token import DashboardToken
 from app.schemas.avaliacao_fisica import AvaliacaoFisicaCreate
 from app.schemas.execucao import ExecucaoCreate
 from app.schemas.exercicio import ExercicioCreate
@@ -11,6 +13,7 @@ from app.schemas.treino import TreinoCreate
 from app.schemas.treino_exercicio import TreinoExercicioCreate
 from app.schemas.usuario import UsuarioCreate
 from app.service.avaliacao_service import AvaliacaoService
+from app.service.dashboard_token_service import DashboardTokenService
 from app.service.execucao_service import ExecucaoService
 from app.service.exercicio_service import ExercicioService
 from app.service.treino_exercicio import TreinoExercicioService
@@ -110,50 +113,239 @@ def _seed_cenario(db_session):
     return usuario, treino, avaliacao
 
 
-def test_dashboard_endpoints(db_session):
-    usuario, treino, avaliacao = _seed_cenario(db_session)
+# ---------------------------------------------------------------------------
+# Testes do DashboardTokenService
+# ---------------------------------------------------------------------------
 
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+class TestDashboardTokenService:
 
-    app.dependency_overrides[get_db] = override_get_db
-    client = TestClient(app)
-
-    try:
-        base_params = {"usuario_id": usuario.id}
-
-        resposta_dashboard = client.get("/dashboard", params=base_params)
-        assert resposta_dashboard.status_code == 200
-        assert "resumo" in resposta_dashboard.json()
-
-        resposta_treinos = client.get("/dashboard/treinos", params=base_params)
-        assert resposta_treinos.status_code == 200
-        assert len(resposta_treinos.json()["treinos"]) == 1
-
-        resposta_treino = client.get(f"/dashboard/treinos/{treino.id}", params=base_params)
-        assert resposta_treino.status_code == 200
-        assert len(resposta_treino.json()["exercicios"]) == 1
-
-        resposta_treino_dia = client.get("/dashboard/treino-do-dia", params=base_params)
-        assert resposta_treino_dia.status_code == 200
-        assert "treino" in resposta_treino_dia.json()
-
-        resposta_evolucao = client.get("/dashboard/evolucao", params=base_params)
-        assert resposta_evolucao.status_code == 200
-        assert "historico_por_exercicio" in resposta_evolucao.json()
-
-        resposta_avaliacoes = client.get("/dashboard/avaliacoes", params=base_params)
-        assert resposta_avaliacoes.status_code == 200
-        assert len(resposta_avaliacoes.json()["avaliacoes"]) == 1
-
-        resposta_avaliacao = client.get(
-            f"/dashboard/avaliacoes/{avaliacao.id}",
-            params=base_params,
+    def test_emitir_cria_token_valido(self, db_session):
+        usuario = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Joao", telefone="11900000001")
         )
-        assert resposta_avaliacao.status_code == 200
-        assert resposta_avaliacao.json()["avaliacao"]["id"] == avaliacao.id
-    finally:
-        app.dependency_overrides.clear()
+        service = DashboardTokenService(db_session)
+        token = service.emitir(usuario_id=usuario.id, ttl_minutos=60)
+
+        assert token.token
+        assert token.usuario_id == usuario.id
+        assert token.used is False
+        expires = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
+        assert expires > datetime.now(timezone.utc)
+
+    def test_validar_token_valido(self, db_session):
+        usuario = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Ana", telefone="11900000002")
+        )
+        service = DashboardTokenService(db_session)
+        emitido = service.emitir(usuario_id=usuario.id, ttl_minutos=60)
+
+        validado = service.validar(emitido.token)
+        assert validado.usuario_id == usuario.id
+
+    def test_validar_token_inexistente(self, db_session):
+        service = DashboardTokenService(db_session)
+        with pytest.raises(ValueError, match="Token inválido"):
+            service.validar("token-que-nao-existe")
+
+    def test_validar_token_expirado(self, db_session):
+        usuario = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Carlos", telefone="11900000003")
+        )
+        service = DashboardTokenService(db_session)
+        token = service.emitir(usuario_id=usuario.id, ttl_minutos=60)
+
+        # Força expiração
+        token.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db_session.commit()
+
+        with pytest.raises(ValueError, match="Token expirado"):
+            service.validar(token.token)
+
+    def test_validar_token_ja_usado(self, db_session):
+        usuario = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Bia", telefone="11900000004")
+        )
+        service = DashboardTokenService(db_session)
+        token = service.emitir(usuario_id=usuario.id, ttl_minutos=60)
+
+        token.used = True
+        db_session.commit()
+
+        with pytest.raises(ValueError, match="Token já utilizado"):
+            service.validar(token.token)
+
+    def test_ttl_minimo_de_1_minuto(self, db_session):
+        usuario = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Leo", telefone="11900000005")
+        )
+        service = DashboardTokenService(db_session)
+        token = service.emitir(usuario_id=usuario.id, ttl_minutos=0)
+
+        assert token.expires_at is not None
+        expires = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
+        assert expires > datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Testes dos endpoints do dashboard (com token)
+# ---------------------------------------------------------------------------
+
+class TestDashboardEndpoints:
+
+    def _client_com_token(self, db_session, usuario_id: str):
+        """Retorna (client, token_str) com override de sessão."""
+        token_registro = DashboardTokenService(db_session).emitir(usuario_id=usuario_id)
+
+        def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+        return TestClient(app), token_registro.token
+
+    def test_dashboard_com_token_valido(self, db_session):
+        usuario, treino, avaliacao = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get("/dashboard", params={"token": token})
+            assert resp.status_code == 200
+            assert "resumo" in resp.json()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_dashboard_sem_token_retorna_422(self, db_session):
+        def override_get_db():
+            yield db_session
+        app.dependency_overrides[get_db] = override_get_db
+        client = TestClient(app)
+        try:
+            resp = client.get("/dashboard")
+            assert resp.status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_dashboard_token_invalido_retorna_401(self, db_session):
+        def override_get_db():
+            yield db_session
+        app.dependency_overrides[get_db] = override_get_db
+        client = TestClient(app)
+        try:
+            resp = client.get("/dashboard", params={"token": "token-falso"})
+            assert resp.status_code == 401
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_dashboard_token_expirado_retorna_401(self, db_session):
+        usuario, _, _ = _seed_cenario(db_session)
+        service = DashboardTokenService(db_session)
+        token = service.emitir(usuario_id=usuario.id, ttl_minutos=60)
+        token.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db_session.commit()
+
+        def override_get_db():
+            yield db_session
+        app.dependency_overrides[get_db] = override_get_db
+        client = TestClient(app)
+        try:
+            resp = client.get("/dashboard", params={"token": token.token})
+            assert resp.status_code == 401
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_listagem_treinos(self, db_session):
+        usuario, treino, _ = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get("/dashboard/treinos", params={"token": token})
+            assert resp.status_code == 200
+            assert len(resp.json()["treinos"]) == 1
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_detalhar_treino(self, db_session):
+        usuario, treino, _ = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get(f"/dashboard/treinos/{treino.id}", params={"token": token})
+            assert resp.status_code == 200
+            assert len(resp.json()["exercicios"]) == 1
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_treino_do_dia(self, db_session):
+        usuario, _, _ = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get("/dashboard/treino-do-dia", params={"token": token})
+            assert resp.status_code == 200
+            assert "treino" in resp.json()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_evolucao(self, db_session):
+        usuario, _, _ = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get("/dashboard/evolucao", params={"token": token})
+            assert resp.status_code == 200
+            assert "historico_por_exercicio" in resp.json()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_listar_avaliacoes(self, db_session):
+        usuario, _, _ = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get("/dashboard/avaliacoes", params={"token": token})
+            assert resp.status_code == 200
+            assert len(resp.json()["avaliacoes"]) == 1
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_detalhar_avaliacao(self, db_session):
+        usuario, _, avaliacao = _seed_cenario(db_session)
+        client, token = self._client_com_token(db_session, usuario.id)
+        try:
+            resp = client.get(
+                f"/dashboard/avaliacoes/{avaliacao.id}",
+                params={"token": token},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["avaliacao"]["id"] == avaliacao.id
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_token_nao_acessa_dados_de_outro_usuario(self, db_session):
+        """Token do usuário A não pode acessar avaliação do usuário B."""
+        usuario_a, _, _ = _seed_cenario(db_session)
+
+        usuario_b = UsuarioService(db_session).criar_usuario(
+            UsuarioCreate(name="Pedro", telefone="11977776666")
+        )
+        avaliacao_b = AvaliacaoService(db_session).criar_avaliacao(
+            AvaliacaoFisicaCreate(
+                usuario_id=usuario_b.id,
+                data_avaliacao=datetime.now(timezone.utc),
+                peso=90.0,
+                altura=180.0,
+                percentual_gordura=20.0,
+                massa_gorda=18.0,
+                massa_muscular=30.0,
+                imc=27.8,
+                gordura_visceral=10.0,
+                agua_corporal=40.0,
+                taxa_metabolica_basal=1800.0,
+                observacoes="",
+            )
+        )
+
+        # Token gerado para usuário A
+        client, token_a = self._client_com_token(db_session, usuario_a.id)
+        try:
+            resp = client.get(
+                f"/dashboard/avaliacoes/{avaliacao_b.id}",
+                params={"token": token_a},
+            )
+            # Deve retornar 404 pois a avaliação não pertence ao usuário A
+            assert resp.status_code == 404
+        finally:
+            app.dependency_overrides.clear()

@@ -13,6 +13,7 @@ __pycache__/
 # IDE-specific files
 .idea/
 .vscode/
+.kiro/
 
 # Database files (if using SQLite for development)
 *.db
@@ -24,3 +25,6 @@ alembic/versions/
 
 # Logs
 *.log
+
+# Dataset de exercícios (repositório externo)
+exercises-dataset/

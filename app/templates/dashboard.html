@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AITrainer{% endblock %}
+
+{% block content %}
+
+{# ── KPIs ──────────────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon"><i class="bi bi-calendar-check"></i></div>
+      <div class="kpi-value">{{ indicadores.dias_treinados_ultimos_30_dias }}</div>
+      <div class="kpi-label">Dias treinados (30d)</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(124,58,237,.15);color:#a78bfa;">
+        <i class="bi bi-lightning-charge"></i>
+      </div>
+      <div class="kpi-value">{{ indicadores.total_execucoes_ultimos_30_dias }}</div>
+      <div class="kpi-label">Execuções (30d)</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(52,211,153,.12);color:#34d399;">
+        <i class="bi bi-speedometer2"></i>
+      </div>
+      {% if indicadores.peso_atual %}
+        <div class="kpi-value">{{ "%.1f"|format(indicadores.peso_atual) }}<span style="font-size:1rem;font-weight:400;color:var(--text-muted);"> kg</span></div>
+        <div class="kpi-label">Peso atual</div>
+        {% if indicadores.variacao_peso is not none %}
+          <div class="kpi-delta {% if indicadores.variacao_peso <= 0 %}delta-pos{% else %}delta-neg{% endif %}">
+            <i class="bi bi-arrow-{% if indicadores.variacao_peso <= 0 %}down{% else %}up{% endif %}-short"></i>
+            {{ "%.1f"|format(indicadores.variacao_peso|abs) }} kg vs anterior
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="kpi-value" style="color:var(--text-muted);">—</div>
+        <div class="kpi-label">Peso atual</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-icon" style="background:rgba(251,191,36,.12);color:#fbbf24;">
+        <i class="bi bi-trophy"></i>
+      </div>
+      {% if indicadores.massa_muscular_atual %}
+        <div class="kpi-value">{{ "%.1f"|format(indicadores.massa_muscular_atual) }}<span style="font-size:1rem;font-weight:400;color:var(--text-muted);"> kg</span></div>
+        <div class="kpi-label">Massa muscular</div>
+      {% else %}
+        <div class="kpi-value" style="color:var(--text-muted);">—</div>
+        <div class="kpi-label">Massa muscular</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Treino do dia ─────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-calendar3"></i> Treino de hoje</div>
+      {% if treino_dia %}
+        <div class="mb-3">
+          <span style="font-size:1.05rem;font-weight:600;">{{ treino_dia.nome }}</span>
+          <span class="ms-2" style="font-size:.8rem;color:var(--text-muted);">{{ treino_dia.dia_da_semana }}</span>
+          {% if treino_dia.descricao %}
+            <div style="font-size:.82rem;color:var(--text-muted);margin-top:.2rem;">{{ treino_dia.descricao }}</div>
+          {% endif %}
+        </div>
+        {% if exercicios_dia %}
+          <div class="table-responsive">
+            <table class="ai-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Exercício</th>
+                  <th class="text-center">Séries</th>
+                  <th class="text-center">Reps</th>
+                  <th class="text-center">Descanso</th>
+                  <th>Obs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ex in exercicios_dia %}
+                <tr>
+                  <td style="color:var(--text-muted);width:2rem;">{{ ex.ordem }}</td>
+                  <td>{{ ex.nome_exercicio }}</td>
+                  <td class="text-center">{{ ex.series }}</td>
+                  <td class="text-center">{{ ex.repeticoes }}</td>
+                  <td class="text-center" style="color:var(--text-muted);">{{ ex.descanso }}s</td>
+                  <td style="color:var(--text-muted);font-size:.8rem;">{{ ex.observacoes or "—" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="empty mb-0"><i class="bi bi-info-circle me-1"></i>Nenhum treino programado para hoje.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Gráficos linha 1 ──────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-12 col-md-6">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-graph-up"></i> Evolução do peso</div>
+      {% if grafico_peso.labels %}
+        <div class="chart-wrap"><canvas id="chartPeso"></canvas></div>
+      {% else %}
+        <p class="empty"><i class="bi bi-info-circle me-1"></i>Sem avaliações registradas.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-activity"></i> Composição corporal</div>
+      {% if grafico_composicao.labels %}
+        <div class="chart-wrap"><canvas id="chartComposicao"></canvas></div>
+      {% else %}
+        <p class="empty"><i class="bi bi-info-circle me-1"></i>Sem avaliações registradas.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Gráficos linha 2 ──────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-12 col-md-6">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-bar-chart-line"></i> Volume semanal</div>
+      {% if grafico_volume.labels %}
+        <div class="chart-wrap"><canvas id="chartVolume"></canvas></div>
+      {% else %}
+        <p class="empty"><i class="bi bi-info-circle me-1"></i>Sem execuções registradas.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-arrow-up-right-circle"></i> Evolução de carga</div>
+      {% if grafico_carga.datasets %}
+        <div class="chart-wrap"><canvas id="chartCarga"></canvas></div>
+      {% else %}
+        <p class="empty"><i class="bi bi-info-circle me-1"></i>Sem execuções registradas.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Treinos ativos ────────────────────────────────────────────────────── #}
+{% if treinos %}
+<div class="row g-3 mb-2">
+  <div class="col-12">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-layout-text-window-reverse"></i> Treinos ativos</div>
+      <div class="row g-2">
+        {% for t in treinos %}
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+          <div class="treino-badge">
+            <div class="t-name">{{ t.nome }}</div>
+            <div class="t-day"><i class="bi bi-clock me-1"></i>{{ t.dia_da_semana }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const PESO   = {{ grafico_peso       | tojson }};
+  const COMP   = {{ grafico_composicao | tojson }};
+  const VOLUME = {{ grafico_volume     | tojson }};
+  const CARGA  = {{ grafico_carga      | tojson }};
+
+  Chart.defaults.color = '#6b7280';
+  Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+  Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+  Chart.defaults.font.size = 11;
+
+  const PALETTE = ['#4f6ef7','#a78bfa','#34d399','#fbbf24','#f87171','#38bdf8','#fb923c','#e879f9'];
+
+  function baseScales() {
+    return {
+      x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { maxTicksLimit: 7 } },
+      y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { maxTicksLimit: 6 } }
+    };
+  }
+
+  /* ── Peso ── */
+  if (PESO.labels && PESO.labels.length) {
+    const ctx = document.getElementById('chartPeso');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: PESO.labels,
+        datasets: [{
+          data: PESO.values,
+          borderColor: '#4f6ef7',
+          backgroundColor: (c) => {
+            const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
+            g.addColorStop(0, 'rgba(79,110,247,.25)');
+            g.addColorStop(1, 'rgba(79,110,247,.0)');
+            return g;
+          },
+          fill: true, tension: .4, pointRadius: 4,
+          pointBackgroundColor: '#4f6ef7', borderWidth: 2,
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } }, scales: baseScales() }
+    });
+  }
+
+  /* ── Composição ── */
+  if (COMP.labels && COMP.labels.length) {
+    new Chart(document.getElementById('chartComposicao'), {
+      type: 'line',
+      data: {
+        labels: COMP.labels,
+        datasets: [
+          { label: '% Gordura', data: COMP.gordura,
+            borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.12)',
+            fill: true, tension: .4, pointRadius: 3, borderWidth: 2 },
+          { label: 'Massa muscular (kg)', data: COMP.muscular,
+            borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.1)',
+            fill: true, tension: .4, pointRadius: 3, borderWidth: 2 },
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 14 } } },
+        scales: baseScales() }
+    });
+  }
+
+  /* ── Volume semanal ── */
+  if (VOLUME.labels && VOLUME.labels.length) {
+    new Chart(document.getElementById('chartVolume'), {
+      type: 'bar',
+      data: {
+        labels: VOLUME.labels,
+        datasets: [{
+          data: VOLUME.values,
+          backgroundColor: 'rgba(79,110,247,.7)',
+          borderRadius: 5, borderSkipped: false,
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } }, scales: baseScales() }
+    });
+  }
+
+  /* ── Carga por exercício ── */
+  if (CARGA.datasets && CARGA.datasets.length) {
+    new Chart(document.getElementById('chartCarga'), {
+      type: 'line',
+      data: {
+        labels: CARGA.labels,
+        datasets: CARGA.datasets.map((ds, i) => ({
+          label: ds.label,
+          data: ds.data,
+          borderColor: PALETTE[i % PALETTE.length],
+          backgroundColor: 'transparent',
+          tension: .35, pointRadius: 3, borderWidth: 2,
+          spanGaps: true,
+        }))
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } },
+        scales: baseScales() }
+    });
+  }
+</script>
+{% endblock %}

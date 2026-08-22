@@ -32,6 +32,12 @@ if not DB_URL:
         f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
 
+# Evolution API (WhatsApp)
+EVOLUTION_API_URL      = os.getenv("EVOLUTION_API_URL", "http://localhost:8080")
+EVOLUTION_API_KEY      = os.getenv("EVOLUTION_API_KEY", "")
+EVOLUTION_INSTANCE     = os.getenv("EVOLUTION_INSTANCE", "aitrainer")
+EVOLUTION_WEBHOOK_TOKEN = os.getenv("EVOLUTION_WEBHOOK_TOKEN", "")
+
 
 if __name__ == "__main__":
     print(f"DB_HOST: {DB_HOST}")
