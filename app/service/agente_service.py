@@ -27,6 +27,9 @@ _PEDIDO_GIF_PATTERN = re.compile(
 _NOME_NO_PEDIDO_GIF_PATTERN = re.compile(
     r"\bgif\s+(?:do|da|de|pro|pra|para)?\s*(.+)$", re.IGNORECASE
 )
+_MAX_HISTORICO_LINHAS = 30
+_MAX_RESUMOS = 8
+_MAX_RESUMOS_NO_CONTEXTO = 4
 
 _SYSTEM_PROMPT = """Você é o AITrainer, um assistente de treino em WhatsApp.
 
@@ -135,6 +138,7 @@ class AgenteService:
     def __init__(self) -> None:
         self._historico: dict[str, list[str]] = {}
         self._ultimo_exercicio: dict[str, dict[str, str]] = {}
+        self._resumo_contexto: dict[str, list[str]] = {}
 
     @staticmethod
     def _contexto_telefone(thread_id: str) -> str:
@@ -148,10 +152,13 @@ class AgenteService:
     def _mensagem_com_contexto(self, thread_id: str, mensagem: str) -> str:
         """Monta contexto curto com telefone confirmado e histórico recente."""
         historico = self._historico.get(thread_id, [])
-        recente = historico[-10:]
+        recente = historico[-16:]
         contexto_fixo = self._contexto_telefone(thread_id)
         contexto_exercicio = self._contexto_ultimo_exercicio(thread_id)
         contexto_base = f"{contexto_fixo}\n{contexto_exercicio}" if contexto_exercicio else contexto_fixo
+        contexto_resumo = self._contexto_resumo(thread_id)
+        if contexto_resumo:
+            contexto_base = f"{contexto_base}\n{contexto_resumo}"
 
         if not recente:
             return f"{contexto_base}\n\nUsuário: {mensagem}"
@@ -163,6 +170,61 @@ class AgenteService:
             + "\n\nUsuário: "
             + mensagem
         )
+
+    def _contexto_resumo(self, thread_id: str) -> str:
+        resumos = self._resumo_contexto.get(thread_id, [])
+        if not resumos:
+            return ""
+
+        ultimos = resumos[-_MAX_RESUMOS_NO_CONTEXTO:]
+        return "Resumo acumulado da conversa:\n" + "\n".join(f"- {item}" for item in ultimos)
+
+    @staticmethod
+    def _normalizar_texto_resumo(texto: str, max_chars: int = 140) -> str:
+        texto = re.sub(r"\s+", " ", (texto or "")).strip()
+        if len(texto) <= max_chars:
+            return texto
+        return f"{texto[: max_chars - 3].rstrip()}..."
+
+    def _resumir_linhas_historico(self, linhas: list[str]) -> str:
+        itens: list[str] = []
+
+        for linha in linhas:
+            if not linha:
+                continue
+            if linha.startswith("Usuário:"):
+                conteudo = linha.split(":", 1)[1]
+                itens.append(f"U: {self._normalizar_texto_resumo(conteudo)}")
+            elif linha.startswith("Assistente:"):
+                conteudo = linha.split(":", 1)[1]
+                itens.append(f"A: {self._normalizar_texto_resumo(conteudo)}")
+            else:
+                itens.append(self._normalizar_texto_resumo(linha))
+
+        if not itens:
+            return ""
+
+        if len(itens) > 6:
+            itens = itens[:2] + itens[-4:]
+
+        return " | ".join(item for item in itens if item)
+
+    def _compactar_historico(self, thread_id: str) -> None:
+        historico = self._historico.get(thread_id, [])
+        if len(historico) <= _MAX_HISTORICO_LINHAS:
+            return
+
+        antigas = historico[:-_MAX_HISTORICO_LINHAS]
+        self._historico[thread_id] = historico[-_MAX_HISTORICO_LINHAS:]
+
+        resumo = self._resumir_linhas_historico(antigas)
+        if not resumo:
+            return
+
+        blocos = self._resumo_contexto.setdefault(thread_id, [])
+        blocos.append(resumo)
+        if len(blocos) > _MAX_RESUMOS:
+            self._resumo_contexto[thread_id] = blocos[-_MAX_RESUMOS:]
 
     def _contexto_ultimo_exercicio(self, thread_id: str) -> str:
         estado = self._ultimo_exercicio.get(thread_id, {})
@@ -309,8 +371,7 @@ class AgenteService:
 
         historico = self._historico.setdefault(thread_id, [])
         historico.extend([f"Usuário: {mensagem}", f"Assistente: {resposta}"])
-        if len(historico) > 20:
-            historico[:] = historico[-20:]
+        self._compactar_historico(thread_id)
 
         return {
             "thread_id": thread_id,

@@ -11,8 +11,10 @@ class FakeAgent:
     def __init__(self, outputs):
         self._outputs = outputs
         self._i = 0
+        self.calls = []
 
     def invoke(self, *_args, **_kwargs):
+        self.calls.append((_args, _kwargs))
         saida = self._outputs[self._i]
         self._i += 1
         return saida
@@ -65,3 +67,23 @@ def test_usa_ultimo_exercicio_no_fallback_de_gif(monkeypatch):
 
     assert "Link do GIF:" in resultado["resposta"]
     assert "3142-dzz6BiV.gif" in resultado["resposta"]
+
+
+def test_segura_contexto_geral_com_resumo_automatico(monkeypatch):
+    outputs = [{"messages": [DummyMessage("ok")]} for _ in range(20)]
+    fake = FakeAgent(outputs)
+
+    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
+    monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
+
+    service = AgenteService()
+    thread_id = "35999999999"
+
+    for i in range(20):
+        service.conversar(f"pedido geral {i}", thread_id)
+
+    assert service._resumo_contexto.get(thread_id)
+
+    ultimo_payload = fake.calls[-1][0][0]
+    mensagem_enviada = ultimo_payload["messages"][0][1]
+    assert "Resumo acumulado da conversa:" in mensagem_enviada
