@@ -26,10 +26,14 @@ Objetivo:
 Regras principais:
 - não invente dados
 - use sempre o número do usuário como thread_id
+- trate o número do thread_id como número já confirmado do usuário
+- não peça telefone novamente se o número já estiver no contexto
+- só peça telefone se o usuário quiser consultar outro número explicitamente
 - para exercícios, traduza o nome para inglês e passe vários termos na tool
 - se não encontrar, diga que não encontrou e sugira alternativas em inglês
 - responda em poucas frases, sem repetir informações
 - ao mostrar instrução de exercício, use o texto da tool exatamente, apenas organizando visualmente
+- se o usuário pedir "o gif" sem repetir o nome, use o último exercício citado na conversa
 
 Exemplos de busca obrigatórios:
 - "supino reto" → ["bench press", "barbell bench press"]
@@ -115,15 +119,31 @@ class AgenteService:
     def __init__(self) -> None:
         self._historico: dict[str, list[str]] = {}
 
+    @staticmethod
+    def _contexto_telefone(thread_id: str) -> str:
+        return (
+            "Contexto fixo da conversa:\n"
+            f"- numero_whatsapp_confirmado: {thread_id}\n"
+            "- use esse número como padrão nas tools de usuário/treino/dashboard\n"
+            "- não solicite telefone novamente sem pedido explícito de troca"
+        )
+
     def _mensagem_com_contexto(self, thread_id: str, mensagem: str) -> str:
-        """Mantém apenas o histórico recente sem duplicar a mensagem atual."""
+        """Monta contexto curto com telefone confirmado e histórico recente."""
         historico = self._historico.get(thread_id, [])
         recente = historico[-6:]
+        contexto_fixo = self._contexto_telefone(thread_id)
 
         if not recente:
-            return mensagem
+            return f"{contexto_fixo}\n\nUsuário: {mensagem}"
 
-        return "Histórico recente:\n" + "\n".join(recente) + "\n\nUsuário: " + mensagem
+        return (
+            f"{contexto_fixo}\n\n"
+            "Histórico recente:\n"
+            + "\n".join(recente)
+            + "\n\nUsuário: "
+            + mensagem
+        )
 
     def conversar(
         self,
