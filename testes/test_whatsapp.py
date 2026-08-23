@@ -130,6 +130,21 @@ class TestWhatsappService:
         assert svc._post.call_count == 1
         assert "sendText" in svc._post.call_args[0][0]
 
+    def test_remove_links_vazios_de_gif_do_texto(self):
+        svc = self._service()
+        texto = (
+            "Supino com halteres\n"
+            "[Ver animação do Supino com Halteres]()\n"
+            "Mantenha a postura correta."
+        )
+
+        svc.enviar_resposta("5535999326493", texto)
+
+        payload_texto = svc._post.call_args_list[0][0][1]
+        assert "Ver animação do Supino com Halteres" not in payload_texto["text"]
+        assert "[]" not in payload_texto["text"]
+        assert "Mantenha a postura correta." in payload_texto["text"]
+
     def test_texto_vazio_nao_envia(self):
         """Se após remover os GIFs o texto ficar vazio, não envia texto."""
         svc = self._service()

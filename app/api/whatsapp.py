@@ -72,12 +72,9 @@ async def receber_mensagem(
 
     logger.info("Mensagem recebida de %s: %s", numero, texto[:80])
 
-    # Injeta o número no início da mensagem para que o agente o use automaticamente
-    mensagem_com_contexto = f"[meu telefone é {numero}] {texto}"
-
     try:
         resultado = _agente_service.conversar(
-            mensagem=mensagem_com_contexto,
+            mensagem=texto,
             thread_id=numero,
         )
         resposta = resultado["resposta"]

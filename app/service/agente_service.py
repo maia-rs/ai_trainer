@@ -1,13 +1,13 @@
 import os
 
 from langchain_core.messages import SystemMessage
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from app.core.config import (
-    GROQ_API_KEY,
-    GROQ_MODEL,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
     LANGSMITH_API_KEY,
     LANGSMITH_ENDPOINT,
     LANGSMITH_PROJECT,
@@ -15,59 +15,33 @@ from app.core.config import (
 )
 from app.tools.registry import get_agent_tools
 
-_SYSTEM_PROMPT = """Você é o AITrainer, um assistente pessoal de treino inteligente.
+_SYSTEM_PROMPT = """Você é o AITrainer, um assistente de treino em WhatsApp.
 
-Seu papel é ajudar o usuário a:
-- Consultar e registrar seus treinos do dia
-- Registrar execuções de exercícios (carga, séries, repetições)
-- Acompanhar seu progresso e evolução física
-- Gerenciar avaliações físicas
-- Buscar informações sobre exercícios
+Objetivo:
+- responder em português do Brasil
+- ser prático e objetivo
+- usar as tools para buscar informações reais
+- confirmar antes de registrar qualquer dado
 
-Diretrizes de comportamento:
-- Sempre responda em português brasileiro
-- Seja objetivo e prático — o usuário está no contexto de um treino
-- Antes de registrar qualquer dado, confirme com o usuário
-- Quando buscar exercícios, apresente as opções e peça confirmação antes de adicionar a um treino
-- Nunca invente dados — use sempre as tools para buscar informações reais
-- Em caso de dúvida sobre qual exercício o usuário quer dizer, busque e apresente opções
+Regras principais:
+- não invente dados
+- use sempre o número do usuário como thread_id
+- para exercícios, traduza o nome para inglês e passe vários termos na tool
+- se não encontrar, diga que não encontrou e sugira alternativas em inglês
+- responda em poucas frases, sem repetir informações
+- ao mostrar instrução de exercício, use o texto da tool exatamente, apenas organizando visualmente
 
-Identificação do usuário (IMPORTANTE):
-- O thread_id da conversa É o número de telefone do usuário (ex: 5535999326493)
-- Use SEMPRE o thread_id como telefone para consultar o usuário via consultar_usuario
-- NUNCA peça o telefone ao usuário — você já tem essa informação no thread_id
-- Se o usuário não existir no sistema, peça apenas o NOME e crie o cadastro usando o thread_id como telefone
-- O thread_id está disponível no campo "configurable.thread_id" da configuração da conversa
+Exemplos de busca obrigatórios:
+- "supino reto" → ["bench press", "barbell bench press"]
+- "agachamento" → ["squat", "barbell squat", "dumbbell squat"]
+- "rosca direta" → ["barbell curl", "dumbbell curl", "bicep curl"]
+- "crucifixo" → ["dumbbell fly", "cable fly", "chest fly"]
 
-Regras para buscar exercícios (IMPORTANTE):
-- O catálogo interno armazena os nomes dos exercícios em INGLÊS.
-- Quando o usuário mencionar um exercício em português, você DEVE traduzir para inglês
-  e incluir AMBOS os termos na lista `consultas` da tool buscar_informacoes_exercicio.
-- Sempre passe múltiplos termos para aumentar a chance de encontrar o exercício.
-- Exemplos de tradução obrigatória:
-    "pullover com halter"     → ["dumbbell pullover", "pullover"]
-    "elevação frontal"        → ["front raise", "dumbbell front raise"]
-    "abdominal 3/4"           → ["3/4 sit-up", "sit-up", "crunch"]
-    "rosca direta"            → ["barbell curl", "dumbbell curl", "bicep curl"]
-    "agachamento"             → ["squat", "barbell squat", "dumbbell squat"]
-    "supino reto"             → ["bench press", "barbell bench press"]
-    "remada curvada"          → ["bent over row", "barbell bent over row"]
-    "desenvolvimento"         → ["shoulder press", "overhead press"]
-    "leg press"               → ["leg press"]
-    "tríceps testa"           → ["skull crusher", "lying tricep extension"]
-    "crucifixo"               → ["dumbbell fly", "cable fly", "chest fly"]
-    "puxada"                  → ["lat pulldown", "pull-up", "chin-up"]
-- Se mesmo com termos em inglês nada for encontrado, informe o usuário e sugira
-  termos alternativos em inglês para ele tentar.
-
-Regras para apresentar informações de exercícios (IMPORTANTE):
-- Ao exibir a instrução de um exercício, use EXATAMENTE o texto do campo `instrucao`
-  retornado pela tool — nunca expanda, reescreva ou acrescente detalhes próprios.
-- Você pode organizar visualmente (negrito, lista), mas o conteúdo da instrução
-  deve ser fiel ao que veio do banco.
-- Apresente o nome do exercício traduzido para o português — nunca mostre o nome em inglês nem o ID ao usuário.
-- Se quiser mencionar variações, liste apenas as que a tool retornou — nunca invente
-  variações que não apareceram nos resultados.
+Formato de resposta:
+- curta e direta
+- nome do exercício em português
+- instrução do banco, sem acrescentar detalhes
+- se houver GIF, só mencione o link da animação quando for relevante
 """
 
 
@@ -85,10 +59,11 @@ def _criar_agente():
     """Cria e retorna a instância do agente com MemorySaver."""
     _configurar_langsmith()
 
-    llm = ChatGroq(
-        model=GROQ_MODEL,
-        api_key=GROQ_API_KEY,
+    llm = ChatGoogleGenerativeAI(
+        model=GEMINI_MODEL,
+        google_api_key=GEMINI_API_KEY,
         temperature=0,
+        max_output_tokens=180,
     )
 
     return create_react_agent(
@@ -137,56 +112,73 @@ def _extrair_texto_da_resposta(resultado: dict) -> str:
 class AgenteService:
     """Servico de orquestracao do agente com Groq e LangSmith."""
 
+    def __init__(self) -> None:
+        self._historico: dict[str, list[str]] = {}
+
+    def _mensagem_com_contexto(self, thread_id: str, mensagem: str) -> str:
+        """Mantém apenas o histórico recente sem duplicar a mensagem atual."""
+        historico = self._historico.get(thread_id, [])
+        recente = historico[-6:]
+
+        if not recente:
+            return mensagem
+
+        return "Histórico recente:\n" + "\n".join(recente) + "\n\nUsuário: " + mensagem
+
     def conversar(
         self,
         mensagem: str,
         thread_id: str,
     ) -> dict:
-        if not GROQ_API_KEY:
+        if not GEMINI_API_KEY:
             raise ValueError(
-                "GROQ_API_KEY nao configurada. Verifique o arquivo .env."
+                "API_KEY_GEMINI nao configurada. Verifique o arquivo .env."
             )
 
         agente = _get_agente()
+        mensagem_para_modelo = self._mensagem_com_contexto(thread_id, mensagem)
 
         resultado = agente.invoke(
-            {"messages": [("human", mensagem)]},
+            {"messages": [("human", mensagem_para_modelo)]},
             config={"configurable": {"thread_id": thread_id}},
         )
 
         resposta = _extrair_texto_da_resposta(resultado)
 
+        historico = self._historico.setdefault(thread_id, [])
+        historico.extend([f"Usuário: {mensagem}", f"Assistente: {resposta}"])
+        if len(historico) > 12:
+            historico[:] = historico[-12:]
+
         return {
             "thread_id": thread_id,
-            "model": GROQ_MODEL,
+            "model": GEMINI_MODEL,
             "resposta": resposta,
         }
 
     @staticmethod
     def verificar_health() -> tuple[dict, int]:
-        groq_api_key_ok = bool(GROQ_API_KEY)
-        groq_model_ok = bool(GROQ_MODEL)
+        gemini_api_key_ok = bool(GEMINI_API_KEY)
+        gemini_model_ok = bool(GEMINI_MODEL)
 
         langsmith_enabled = bool(LANGSMITH_API_KEY)
-        langsmith_api_key_ok = bool(LANGSMITH_API_KEY)
 
         faltantes = []
-        if not groq_api_key_ok:
-            faltantes.append("GROQ_API_KEY")
-        if not groq_model_ok:
-            faltantes.append("GROQ_MODEL")
+        if not gemini_api_key_ok:
+            faltantes.append("API_KEY_GEMINI")
+        if not gemini_model_ok:
+            faltantes.append("GEMINI_MODEL")
 
         status = "ok" if not faltantes else "error"
         status_code = 200 if status == "ok" else 503
 
         payload = {
             "status": status,
-            "provider": "groq",
+            "provider": "google-gemini",
             "checks": {
-                "groq_api_key": groq_api_key_ok,
-                "groq_model": GROQ_MODEL if groq_model_ok else None,
+                "gemini_api_key": gemini_api_key_ok,
+                "gemini_model": GEMINI_MODEL if gemini_model_ok else None,
                 "langsmith_enabled": langsmith_enabled,
-                "langsmith_api_key": langsmith_api_key_ok,
             },
         }
 

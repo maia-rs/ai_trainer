@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 
 # Regex para detectar URLs de GIF na resposta do agente
 _GIF_PATTERN = re.compile(r'https?://\S+\.gif\b', re.IGNORECASE)
+_EMPTY_MARKDOWN_LINK_PATTERN = re.compile(r'(?<!\!)\[[^\]]*\]\(\s*\)', re.IGNORECASE)
+_MARKDOWN_GIF_LINK_PATTERN = re.compile(
+    r'(?<!\!)\[[^\]]*\]\((https?://[^\s)]+\.gif(?:\?[^\s)]*)?)\)',
+    re.IGNORECASE,
+)
 
 
 class WhatsappService:
@@ -45,6 +50,9 @@ class WhatsappService:
         - Envia o texto (sem as URLs de GIF) como mensagem de texto.
         - Se o texto contiver um link de dashboard, envia como link com preview.
         """
+        texto = _EMPTY_MARKDOWN_LINK_PATTERN.sub("", texto)
+        texto = _MARKDOWN_GIF_LINK_PATTERN.sub(r"\1", texto)
+
         gifs = _GIF_PATTERN.findall(texto)
         texto_limpo = _GIF_PATTERN.sub("", texto).strip()
 

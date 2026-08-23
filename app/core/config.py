@@ -17,10 +17,13 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # Config LLm
-
 API_KEY = os.getenv("API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", API_KEY)
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# Gemini
+GEMINI_API_KEY = os.getenv("API_KEY_GEMINI", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
 LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "AITrainer-Agent")
