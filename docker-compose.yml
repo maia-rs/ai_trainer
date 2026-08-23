@@ -6,12 +6,12 @@ services:
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_trainer}
       MYSQL_USER: ${MYSQL_USER:-ai_trainer_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-troque-essa-senha}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-troque-a-senha-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?defina MYSQL_PASSWORD no .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD no .env}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-troque-a-senha-root}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD no .env}"]
       interval: 15s
       timeout: 10s
       retries: 10
