@@ -2,7 +2,6 @@ import os
 
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from app.core.config import (
@@ -63,7 +62,7 @@ def _configurar_langsmith() -> None:
 
 
 def _criar_agente():
-    """Cria e retorna a instância do agente com MemorySaver."""
+    """Cria e retorna a instância do agente."""
     _configurar_langsmith()
 
     llm = ChatGoogleGenerativeAI(
@@ -76,7 +75,6 @@ def _criar_agente():
     return create_react_agent(
         model=llm,
         tools=get_agent_tools(),
-        checkpointer=MemorySaver(),
         prompt=SystemMessage(content=_SYSTEM_PROMPT),
     )
 
