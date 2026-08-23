@@ -1,4 +1,6 @@
 import os
+import re
+from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -13,6 +15,18 @@ from app.core.config import (
     LANGSMITH_TRACING,
 )
 from app.tools.registry import get_agent_tools
+from app.core.database import SessionLocal
+from app.service.exercicio_service import ExercicioService
+
+_GIF_URL_PATTERN = re.compile(r"https?://\S+\.gif(?:\?\S*)?", re.IGNORECASE)
+_NOME_JSON_PATTERN = re.compile(r'"nome"\s*:\s*"([^"]+)"')
+_NOME_EM_DESTAQUE_PATTERN = re.compile(r"\*([^*]+)\*")
+_PEDIDO_GIF_PATTERN = re.compile(
+    r"\b(gif|anima[cç][aã]o|execu[cç][aã]o)\b", re.IGNORECASE
+)
+_NOME_NO_PEDIDO_GIF_PATTERN = re.compile(
+    r"\bgif\s+(?:do|da|de|pro|pra|para)?\s*(.+)$", re.IGNORECASE
+)
 
 _SYSTEM_PROMPT = """Você é o AITrainer, um assistente de treino em WhatsApp.
 
@@ -80,7 +94,7 @@ def _criar_agente():
     )
 
 
-# Instância única do agente — compartilha o MemorySaver entre requests
+# Instância única do agente
 _agente = None
 
 
@@ -120,6 +134,7 @@ class AgenteService:
 
     def __init__(self) -> None:
         self._historico: dict[str, list[str]] = {}
+        self._ultimo_exercicio: dict[str, dict[str, str]] = {}
 
     @staticmethod
     def _contexto_telefone(thread_id: str) -> str:
@@ -133,19 +148,142 @@ class AgenteService:
     def _mensagem_com_contexto(self, thread_id: str, mensagem: str) -> str:
         """Monta contexto curto com telefone confirmado e histórico recente."""
         historico = self._historico.get(thread_id, [])
-        recente = historico[-6:]
+        recente = historico[-10:]
         contexto_fixo = self._contexto_telefone(thread_id)
+        contexto_exercicio = self._contexto_ultimo_exercicio(thread_id)
+        contexto_base = f"{contexto_fixo}\n{contexto_exercicio}" if contexto_exercicio else contexto_fixo
 
         if not recente:
-            return f"{contexto_fixo}\n\nUsuário: {mensagem}"
+            return f"{contexto_base}\n\nUsuário: {mensagem}"
 
         return (
-            f"{contexto_fixo}\n\n"
+            f"{contexto_base}\n\n"
             "Histórico recente:\n"
             + "\n".join(recente)
             + "\n\nUsuário: "
             + mensagem
         )
+
+    def _contexto_ultimo_exercicio(self, thread_id: str) -> str:
+        estado = self._ultimo_exercicio.get(thread_id, {})
+        nome = estado.get("nome")
+        gif_url = estado.get("gif_url")
+
+        if not nome and not gif_url:
+            return ""
+
+        linhas = ["Contexto de exercício recente:"]
+        if nome:
+            linhas.append(f"- ultimo_exercicio_citado: {nome}")
+        if gif_url:
+            linhas.append(f"- ultimo_gif_url: {gif_url}")
+        return "\n".join(linhas)
+
+    @staticmethod
+    def _coletar_textos(valor: Any) -> list[str]:
+        """Varre recursivamente estruturas para extrair textos úteis."""
+        textos: list[str] = []
+        pilha: list[Any] = [valor]
+
+        while pilha:
+            atual = pilha.pop()
+            if atual is None:
+                continue
+
+            if isinstance(atual, str):
+                textos.append(atual)
+                continue
+
+            if isinstance(atual, dict):
+                pilha.extend(atual.values())
+                continue
+
+            if isinstance(atual, (list, tuple, set)):
+                pilha.extend(list(atual))
+                continue
+
+            conteudo = getattr(atual, "content", None)
+            if conteudo is not None:
+                pilha.append(conteudo)
+
+        return textos
+
+    @staticmethod
+    def _normalizar_nome_exercicio(nome: str) -> str:
+        nome = nome.strip().strip("* ").strip()
+        return re.sub(r"\s+", " ", nome)
+
+    @staticmethod
+    def _eh_pedido_gif(texto: str) -> bool:
+        return bool(_PEDIDO_GIF_PATTERN.search(texto or ""))
+
+    @staticmethod
+    def _extrair_nome_do_pedido_gif(texto: str) -> str | None:
+        match = _NOME_NO_PEDIDO_GIF_PATTERN.search((texto or "").strip())
+        if not match:
+            return None
+        nome = re.sub(r"[?.!,:;]+$", "", match.group(1)).strip()
+        if not nome:
+            return None
+        return nome
+
+    @staticmethod
+    def _extrair_gif_url(texto: str) -> str | None:
+        urls = _GIF_URL_PATTERN.findall(texto or "")
+        return urls[-1] if urls else None
+
+    def _buscar_gif_por_nome(self, nome_exercicio: str) -> str | None:
+        """Busca um GIF no catálogo para usar como fallback determinístico."""
+        with SessionLocal() as session:
+            service = ExercicioService(session)
+            resultados = service.search_exercicios(nome=nome_exercicio, limite=1)
+            if not resultados:
+                return None
+            return resultados[0].gif_url
+
+    def _atualizar_memoria_exercicio(self, thread_id: str, resultado: dict, resposta: str) -> None:
+        estado = self._ultimo_exercicio.setdefault(thread_id, {})
+
+        textos = self._coletar_textos(resultado)
+        textos.append(resposta)
+        corpus = "\n".join(t for t in textos if t)
+
+        gif_url = self._extrair_gif_url(corpus)
+        if gif_url:
+            estado["gif_url"] = gif_url
+
+        nomes_json = _NOME_JSON_PATTERN.findall(corpus)
+        if nomes_json:
+            estado["nome"] = self._normalizar_nome_exercicio(nomes_json[-1])
+            return
+
+        nomes_md = _NOME_EM_DESTAQUE_PATTERN.findall(resposta or "")
+        if nomes_md:
+            estado["nome"] = self._normalizar_nome_exercicio(nomes_md[0])
+
+    def _garantir_link_gif(self, thread_id: str, mensagem: str, resposta: str) -> str:
+        if not self._eh_pedido_gif(mensagem):
+            return resposta
+
+        if self._extrair_gif_url(resposta):
+            return resposta
+
+        estado = self._ultimo_exercicio.setdefault(thread_id, {})
+        gif_url = estado.get("gif_url")
+
+        if not gif_url:
+            nome_exercicio = self._extrair_nome_do_pedido_gif(mensagem) or estado.get("nome")
+            if nome_exercicio:
+                gif_url = self._buscar_gif_por_nome(nome_exercicio)
+                if gif_url:
+                    estado["nome"] = self._normalizar_nome_exercicio(nome_exercicio)
+                    estado["gif_url"] = gif_url
+
+        if not gif_url:
+            return resposta
+
+        complemento = f"Link do GIF: {gif_url}"
+        return f"{resposta.strip()}\n{complemento}" if resposta.strip() else complemento
 
     def conversar(
         self,
@@ -166,11 +304,13 @@ class AgenteService:
         )
 
         resposta = _extrair_texto_da_resposta(resultado)
+        self._atualizar_memoria_exercicio(thread_id, resultado, resposta)
+        resposta = self._garantir_link_gif(thread_id, mensagem, resposta)
 
         historico = self._historico.setdefault(thread_id, [])
         historico.extend([f"Usuário: {mensagem}", f"Assistente: {resposta}"])
-        if len(historico) > 12:
-            historico[:] = historico[-12:]
+        if len(historico) > 20:
+            historico[:] = historico[-20:]
 
         return {
             "thread_id": thread_id,
