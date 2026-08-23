@@ -150,13 +150,13 @@ class WhatsappService:
             "media": url,
             "fileName": url.split("/")[-1],
         }
-        resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload)
+        resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload, timeout=45)
         logger.info("sendMedia para %s url=%s resultado=%s", numero, url, resultado)
         return resultado
 
-    def _post(self, url: str, payload: dict) -> bool:
+    def _post(self, url: str, payload: dict, timeout: int = 15) -> bool:
         try:
-            resp = httpx.post(url, json=payload, headers=self._headers, timeout=15)
+            resp = httpx.post(url, json=payload, headers=self._headers, timeout=timeout)
             if resp.status_code not in (200, 201):
                 logger.warning(
                     "Evolution API retornou %s para %s: %s",
