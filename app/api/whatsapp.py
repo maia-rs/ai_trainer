@@ -7,10 +7,15 @@ ao agente, devolvendo a resposta ao remetente.
 from __future__ import annotations
 
 import logging
+import time
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, status
 
-from app.core.config import EVOLUTION_WEBHOOK_TOKEN
+from app.core.config import (
+    ENVIRONMENT,
+    EVOLUTION_DEDUP_TTL_SECONDS,
+    EVOLUTION_WEBHOOK_TOKEN,
+)
 from app.schemas.whatsapp import WhatsappWebhookPayload
 from app.service.agente_service import AgenteService
 from app.service.whatsapp_service import WhatsappService
@@ -21,6 +26,27 @@ router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 _agente_service = AgenteService()
 _whatsapp_service = WhatsappService()
+_mensagens_processadas: dict[str, float] = {}
+
+
+def _ambiente_producao() -> bool:
+    return ENVIRONMENT in {"prod", "production"}
+
+
+def _mensagem_duplicada(message_id: str) -> bool:
+    agora = time.monotonic()
+    ttl = max(EVOLUTION_DEDUP_TTL_SECONDS, 1)
+
+    # Limpa entradas expiradas para evitar crescimento indefinido.
+    expiradas = [mid for mid, ts in _mensagens_processadas.items() if agora - ts > ttl]
+    for mid in expiradas:
+        _mensagens_processadas.pop(mid, None)
+
+    if message_id in _mensagens_processadas:
+        return True
+
+    _mensagens_processadas[message_id] = agora
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -29,8 +55,15 @@ _whatsapp_service = WhatsappService()
 
 def _verificar_token(token: str | None) -> None:
     """Rejeita requisições sem o token correto quando ele está configurado."""
+    if _ambiente_producao() and not EVOLUTION_WEBHOOK_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook token não configurado para ambiente de produção.",
+        )
+
     if not EVOLUTION_WEBHOOK_TOKEN:
         return  # token não configurado → aceita tudo (dev local)
+
     if token != EVOLUTION_WEBHOOK_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -69,6 +102,10 @@ async def receber_mensagem(
     texto = payload.get_texto()
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}
+
+    message_id = payload.get_message_id()
+    if message_id and _mensagem_duplicada(message_id):
+        return {"status": "ignored", "reason": "duplicate_message"}
 
     logger.info("Mensagem recebida de %s: %s", numero, texto[:80])
 

@@ -22,12 +22,13 @@ def _payload(
     from_me: bool = False,
     texto: str = "olá",
     event: str = "messages.upsert",
+    message_id: str = "abc123",
 ) -> dict:
     return {
         "event": event,
         "instance": "aitrainer",
         "data": {
-            "key": {"remoteJid": jid, "fromMe": from_me, "id": "abc123"},
+            "key": {"remoteJid": jid, "fromMe": from_me, "id": message_id},
             "message": {"conversation": texto},
             "messageType": "conversation",
             "pushName": "Rodrigo",
@@ -169,6 +170,8 @@ class TestWebhookEndpoint:
         with (
             patch("app.api.whatsapp._agente_service") as mock_agente,
             patch("app.api.whatsapp._whatsapp_service") as mock_wpp,
+            patch("app.api.whatsapp.ENVIRONMENT", "development"),
+            patch("app.api.whatsapp._mensagens_processadas", {}),
         ):
             mock_agente.conversar.return_value = {"resposta": "Resposta do agente"}
             self.mock_agente = mock_agente
@@ -228,6 +231,18 @@ class TestWebhookEndpoint:
         assert resp.json()["status"] == "ignored"
         self.mock_agente.conversar.assert_not_called()
 
+    def test_mensagem_duplicada_ignorada(self):
+        payload = _payload(message_id="dup-001")
+
+        primeira = self.client.post("/whatsapp/webhook", json=payload)
+        segunda = self.client.post("/whatsapp/webhook", json=payload)
+
+        assert primeira.status_code == 200
+        assert primeira.json()["status"] == "ok"
+        assert segunda.status_code == 200
+        assert segunda.json() == {"status": "ignored", "reason": "duplicate_message"}
+        self.mock_agente.conversar.assert_called_once()
+
     def test_token_invalido_retorna_401(self):
         with patch("app.api.whatsapp.EVOLUTION_WEBHOOK_TOKEN", "segredo123"):
             resp = self.client.post(
@@ -245,6 +260,14 @@ class TestWebhookEndpoint:
                 headers={"x-webhook-token": "segredo123"},
             )
         assert resp.status_code == 200
+
+    def test_producao_sem_token_configurado_retorna_503(self):
+        with (
+            patch("app.api.whatsapp.ENVIRONMENT", "production"),
+            patch("app.api.whatsapp.EVOLUTION_WEBHOOK_TOKEN", ""),
+        ):
+            resp = self.client.post("/whatsapp/webhook", json=_payload())
+        assert resp.status_code == 503
 
     def test_erro_no_agente_responde_mensagem_de_fallback(self):
         self.mock_agente.conversar.side_effect = Exception("falha")

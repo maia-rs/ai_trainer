@@ -4,6 +4,8 @@ import dotenv
 
 dotenv.load_dotenv()
 
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+
 # URL base da API (usada para montar URLs de mídia)
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
@@ -40,6 +42,7 @@ EVOLUTION_API_URL      = os.getenv("EVOLUTION_API_URL", "http://localhost:8080")
 EVOLUTION_API_KEY      = os.getenv("EVOLUTION_API_KEY", "")
 EVOLUTION_INSTANCE     = os.getenv("EVOLUTION_INSTANCE", "aitrainer")
 EVOLUTION_WEBHOOK_TOKEN = os.getenv("EVOLUTION_WEBHOOK_TOKEN", "")
+EVOLUTION_DEDUP_TTL_SECONDS = int(os.getenv("EVOLUTION_DEDUP_TTL_SECONDS", "600"))
 
 
 if __name__ == "__main__":

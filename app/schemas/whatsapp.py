@@ -30,6 +30,11 @@ class WhatsappWebhookPayload(BaseModel):
     instance: str = ""
     data: WhatsappMessageData = Field(default_factory=WhatsappMessageData)
 
+    def get_message_id(self) -> str | None:
+        """Retorna o ID único da mensagem quando disponível."""
+        message_id = self.data.key.id.strip()
+        return message_id or None
+
     def get_numero(self) -> str | None:
         """Retorna apenas os dígitos do número remetente (ex: '5535999326493')."""
         jid = self.data.key.remoteJid
