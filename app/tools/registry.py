@@ -3,6 +3,7 @@ from app.tools.avaliacao_fisica.obter_avaliacao_fisica import obter_avaliacao_fi
 from app.tools.avaliacao_fisica.obter_historico_avaliacao_fisica import obter_historico_avaliacao_fisica
 from app.tools.avaliacao_fisica.registrar_avaliacao_fisica import registrar_avaliacao_fisica
 from app.tools.dashboard.gerar_link_dashboard import gerar_link_dashboard
+from app.tools.execucao.listar_execucoes_recentes import listar_execucoes_recentes
 from app.tools.execucao.obter_historico_treino import obter_historico_treino
 from app.tools.execucao.obter_ultima_execucao import obter_ultima_execucao
 from app.tools.execucao.registrar_execucao_treino import registrar_execucao_treino
@@ -14,6 +15,7 @@ from app.tools.progresso.obter_resumo_progresso import obter_resumo_progresso
 from app.tools.treino.atualizar_treino import atualizar_treino
 from app.tools.treino.criar_treino import criar_treino
 from app.tools.treino.desativar_treino import desativar_treino
+from app.tools.treino.listar_treinos_usuario import listar_treinos_usuario
 from app.tools.treino.obter_treino_do_dia import obter_treino_do_dia
 from app.tools.treino_exercicio.adicionar_exercicio_treino import adicionar_exercicio_treino
 from app.tools.treino_exercicio.atualizar_exercicio_treino import atualizar_exercicio_treino
@@ -31,12 +33,14 @@ def get_agent_tools() -> list:
         criar_treino,
         atualizar_treino,
         desativar_treino,
+        listar_treinos_usuario,
         obter_treino_do_dia,
         adicionar_exercicio_treino,
         atualizar_exercicio_treino,
         obter_exercicios_treino,
         remover_exercicio_treino,
         registrar_execucao_treino,
+        listar_execucoes_recentes,
         obter_ultima_execucao,
         obter_historico_treino,
         registrar_avaliacao_fisica,
