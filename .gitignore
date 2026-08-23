@@ -25,9 +25,6 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
-# Alembic migration scripts (generated)
-alembic/versions/
-
 # Logs
 *.log
 
