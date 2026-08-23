@@ -83,12 +83,18 @@ def _criar_agente():
     """Cria e retorna a instância do agente."""
     _configurar_langsmith()
 
-    llm = ChatGoogleGenerativeAI(
-        model=GEMINI_MODEL,
-        google_api_key=GEMINI_API_KEY,
-        temperature=0,
-        max_output_tokens=320,
-    )
+    llm_kwargs: dict[str, Any] = {
+        "model": GEMINI_MODEL,
+        "google_api_key": GEMINI_API_KEY,
+        "max_output_tokens": 320,
+    }
+
+    # Alguns modelos "flash-lite" ignoram parâmetros de sampling
+    # e geram warning em todo request.
+    if "flash-lite" not in GEMINI_MODEL.lower():
+        llm_kwargs["temperature"] = 0
+
+    llm = ChatGoogleGenerativeAI(**llm_kwargs)
 
     return create_react_agent(
         model=llm,

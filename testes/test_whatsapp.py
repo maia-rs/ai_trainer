@@ -169,7 +169,7 @@ class TestWhatsappService:
         assert "Mantenha a postura correta." in payload_texto["text"]
 
     def test_texto_vazio_nao_envia(self):
-        """Se após remover os GIFs o texto ficar vazio, não envia texto."""
+        """Se resposta for só GIF, envia mídia e também link clicável."""
         svc = self._service()
         svc.enviar_resposta(
             "5535999326493",
@@ -178,7 +178,12 @@ class TestWhatsappService:
         chamadas_texto = [
             c for c in svc._post.call_args_list if "sendText" in c[0][0]
         ]
-        assert len(chamadas_texto) == 0
+        chamadas_midia = [
+            c for c in svc._post.call_args_list if "sendMedia" in c[0][0]
+        ]
+        assert len(chamadas_midia) == 1
+        assert len(chamadas_texto) == 1
+        assert "Link do GIF:" in chamadas_texto[0][0][1]["text"]
 
     def test_texto_longo_e_dividido_em_partes(self):
         svc = self._service()
@@ -311,3 +316,9 @@ class TestWebhookEndpoint:
         self.mock_wpp.enviar_resposta.assert_called_once()
         _, resposta = self.mock_wpp.enviar_resposta.call_args[0]
         assert "erro" in resposta.lower()
+
+    def test_payload_invalido_retorna_ignored_sem_422(self):
+        resp = self.client.post("/whatsapp/webhook", json={"foo": "bar"})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ignored"
+        assert resp.json()["reason"] in {"invalid_payload", "event_not_handled"}

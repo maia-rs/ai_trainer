@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Body, Header, HTTPException, status
 
 from app.core.config import (
     ENVIRONMENT,
@@ -77,7 +77,7 @@ def _verificar_token(token: str | None) -> None:
 
 @router.post("/webhook")
 async def receber_mensagem(
-    payload: WhatsappWebhookPayload,
+    payload: object = Body(default=None),
     x_webhook_token: str | None = Header(default=None, alias="x-webhook-token"),
 ) -> dict:
     """
@@ -91,21 +91,30 @@ async def receber_mensagem(
     """
     _verificar_token(x_webhook_token)
 
+    if not isinstance(payload, dict):
+        return {"status": "ignored", "reason": "invalid_payload"}
+
+    try:
+        payload_model = WhatsappWebhookPayload.model_validate(payload)
+    except Exception:
+        logger.warning("Payload de webhook inválido recebido")
+        return {"status": "ignored", "reason": "invalid_payload"}
+
     # Aceita apenas o evento de nova mensagem
-    if payload.event not in ("messages.upsert", "message.upsert"):
+    if payload_model.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
 
-    numero_destino = payload.get_numero()
+    numero_destino = payload_model.get_numero()
     if not numero_destino:
         return {"status": "ignored", "reason": "no_valid_number"}
 
-    numero_contexto = payload.get_numero_contexto() or numero_destino
+    numero_contexto = payload_model.get_numero_contexto() or numero_destino
 
-    texto = payload.get_texto()
+    texto = payload_model.get_texto()
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}
 
-    message_id = payload.get_message_id()
+    message_id = payload_model.get_message_id()
     if message_id and _mensagem_duplicada(message_id):
         return {"status": "ignored", "reason": "duplicate_message"}
 

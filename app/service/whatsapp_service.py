@@ -61,6 +61,7 @@ class WhatsappService:
         # Remove linhas que ficaram vazias após remover os GIFs
         linhas = [l for l in texto_limpo.splitlines() if l.strip()]
         texto_limpo = "\n".join(linhas).strip()
+        somente_gif = bool(gifs) and not texto_limpo
 
         # Envia o texto principal (em partes quando necessário)
         if texto_limpo:
@@ -73,6 +74,12 @@ class WhatsappService:
             if not enviado:
                 # Fallback: se a API de mídia falhar, envia o link como texto.
                 self._enviar_texto(numero, f"Não consegui enviar o GIF como mídia. Link: {url}")
+                continue
+
+            # Alguns clientes não renderizam GIF mesmo com ACK da API.
+            # Quando a resposta era só GIF, manda também o link clicável.
+            if somente_gif:
+                self._enviar_texto(numero, f"Link do GIF: {url}")
 
     # ------------------------------------------------------------------
     # Métodos internos
