@@ -95,9 +95,11 @@ async def receber_mensagem(
     if payload.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
 
-    numero = payload.get_numero()
-    if not numero:
+    numero_destino = payload.get_numero()
+    if not numero_destino:
         return {"status": "ignored", "reason": "no_valid_number"}
+
+    numero_contexto = payload.get_numero_contexto() or numero_destino
 
     texto = payload.get_texto()
     if not texto:
@@ -107,12 +109,12 @@ async def receber_mensagem(
     if message_id and _mensagem_duplicada(message_id):
         return {"status": "ignored", "reason": "duplicate_message"}
 
-    logger.info("Mensagem recebida de %s: %s", numero, texto[:80])
+    logger.info("Mensagem recebida de %s: %s", numero_destino, texto[:80])
 
     try:
         resultado = _agente_service.conversar(
             mensagem=texto,
-            thread_id=numero,
+            thread_id=numero_contexto,
         )
         resposta = resultado["resposta"]
     except Exception as exc:
@@ -120,7 +122,7 @@ async def receber_mensagem(
         resposta = "Desculpe, ocorreu um erro interno. Tente novamente em instantes."
 
     try:
-        _whatsapp_service.enviar_resposta(numero, resposta)
+        _whatsapp_service.enviar_resposta(numero_destino, resposta)
     except Exception as exc:
         logger.exception("Erro ao enviar resposta via WhatsApp: %s", exc)
 

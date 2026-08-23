@@ -54,6 +54,14 @@ class TestWhatsappWebhookPayload:
         p = WhatsappWebhookPayload(**_payload(jid="1234567890-9876543210@g.us"))
         assert p.get_numero() is None
 
+    def test_get_numero_contexto_remove_55(self):
+        p = WhatsappWebhookPayload(**_payload(jid="5535999326493@s.whatsapp.net"))
+        assert p.get_numero_contexto() == "35999326493"
+
+    def test_get_numero_contexto_remove_zero_e_55(self):
+        p = WhatsappWebhookPayload(**_payload(jid="05535999326493@s.whatsapp.net"))
+        assert p.get_numero_contexto() == "35999326493"
+
     def test_get_texto_conversation(self):
         p = WhatsappWebhookPayload(**_payload(texto="agachamento"))
         assert p.get_texto() == "agachamento"
@@ -172,6 +180,19 @@ class TestWhatsappService:
         ]
         assert len(chamadas_texto) == 0
 
+    def test_texto_longo_e_dividido_em_partes(self):
+        svc = self._service()
+        texto_longo = "\n".join([f"Linha {i} com instruções importantes" for i in range(1, 80)])
+
+        svc.enviar_resposta("5535999326493", texto_longo)
+
+        chamadas_texto = [
+            c for c in svc._post.call_args_list if "sendText" in c[0][0]
+        ]
+        assert len(chamadas_texto) > 1
+        for chamada in chamadas_texto:
+            assert len(chamada[0][1]["text"]) <= 850
+
 
 # ---------------------------------------------------------------------------
 # Testes do endpoint webhook
@@ -205,7 +226,7 @@ class TestWebhookEndpoint:
         self.client.post("/whatsapp/webhook", json=_payload())
         self.mock_agente.conversar.assert_called_once_with(
             mensagem="olá",
-            thread_id="5535999326493",
+            thread_id="35999326493",
         )
 
     def test_resposta_enviada_ao_whatsapp(self):

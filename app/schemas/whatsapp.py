@@ -47,6 +47,27 @@ class WhatsappWebhookPayload(BaseModel):
             return None
         return numero
 
+    def get_numero_contexto(self) -> str | None:
+        """Normaliza o número para DDD+numero (10 ou 11 dígitos) no contexto do agente."""
+        numero = self.get_numero()
+        if not numero:
+            return None
+
+        digitos = "".join(ch for ch in numero if ch.isdigit())
+        # Remove zeros à esquerda comuns em números de discagem
+        while len(digitos) > 11 and digitos.startswith("0"):
+            digitos = digitos[1:]
+
+        # Remove DDI do Brasil quando presente (55)
+        if len(digitos) in (12, 13) and digitos.startswith("55"):
+            digitos = digitos[2:]
+
+        if len(digitos) in (10, 11):
+            return digitos
+
+        # Fallback: usa o número original caso não seja possível normalizar.
+        return numero
+
     def get_texto(self) -> str | None:
         """Extrai o texto da mensagem (conversation ou extended text)."""
         msg = self.data.message

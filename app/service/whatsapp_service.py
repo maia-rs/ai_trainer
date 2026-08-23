@@ -19,6 +19,8 @@ from app.core.config import (
 
 logger = logging.getLogger(__name__)
 
+_MAX_TEXT_CHARS = 850
+
 # Regex para detectar URLs de GIF na resposta do agente
 _GIF_PATTERN = re.compile(r'https?://\S+\.gif\b', re.IGNORECASE)
 _EMPTY_MARKDOWN_LINK_PATTERN = re.compile(r'(?<!\!)\[[^\]]*\]\(\s*\)', re.IGNORECASE)
@@ -60,9 +62,10 @@ class WhatsappService:
         linhas = [l for l in texto_limpo.splitlines() if l.strip()]
         texto_limpo = "\n".join(linhas).strip()
 
-        # Envia o texto principal
+        # Envia o texto principal (em partes quando necessário)
         if texto_limpo:
-            self._enviar_texto(numero, texto_limpo)
+            for parte in self._quebrar_texto(texto_limpo, max_chars=_MAX_TEXT_CHARS):
+                self._enviar_texto(numero, parte)
 
         # Envia cada GIF como mídia
         for url in gifs:
@@ -81,6 +84,53 @@ class WhatsappService:
             "text": texto,
         }
         return self._post(f"{self._base}/sendText/{EVOLUTION_INSTANCE}", payload)
+
+    def _quebrar_texto(self, texto: str, max_chars: int = _MAX_TEXT_CHARS) -> list[str]:
+        """Quebra texto longo em partes menores, preservando legibilidade."""
+        texto = (texto or "").strip()
+        if not texto:
+            return []
+        if len(texto) <= max_chars:
+            return [texto]
+
+        blocos: list[str] = []
+        atual = ""
+
+        for paragrafo in texto.split("\n"):
+            paragrafo = paragrafo.strip()
+            if not paragrafo:
+                continue
+
+            candidato = f"{atual}\n{paragrafo}".strip() if atual else paragrafo
+            if len(candidato) <= max_chars:
+                atual = candidato
+                continue
+
+            if atual:
+                blocos.append(atual)
+                atual = ""
+
+            if len(paragrafo) <= max_chars:
+                atual = paragrafo
+                continue
+
+            palavras = paragrafo.split()
+            parcial = ""
+            for palavra in palavras:
+                candidato_palavra = f"{parcial} {palavra}".strip() if parcial else palavra
+                if len(candidato_palavra) <= max_chars:
+                    parcial = candidato_palavra
+                else:
+                    if parcial:
+                        blocos.append(parcial)
+                    parcial = palavra
+            if parcial:
+                atual = parcial
+
+        if atual:
+            blocos.append(atual)
+
+        return blocos
 
     def _enviar_midia(self, numero: str, url: str, caption: str = "") -> bool:
         """Envia imagem/GIF via URL."""

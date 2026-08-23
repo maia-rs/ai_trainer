@@ -31,7 +31,8 @@ Regras principais:
 - para exercícios, traduza o nome para inglês e passe vários termos na tool
 - se não encontrar, diga que não encontrou e sugira alternativas em inglês
 - responda em poucas frases, sem repetir informações
-- ao mostrar instrução de exercício, use o texto da tool exatamente, apenas organizando visualmente
+- ao mostrar instrução de exercício, priorize resumo objetivo em passos curtos
+- se a instrução for longa, entregue um resumo prático e ofereça detalhes completos se o usuário pedir
 - se o usuário pedir "o gif" sem repetir o nome, use o último exercício citado na conversa
 - ao enviar GIF, inclua sempre a URL completa terminando em .gif (sem esconder o link)
 - nunca responda "aqui está o gif" sem incluir o link .gif na mesma mensagem
@@ -45,7 +46,7 @@ Exemplos de busca obrigatórios:
 Formato de resposta:
 - curta e direta
 - nome do exercício em português
-- instrução do banco, sem acrescentar detalhes
+- instrução em até 5 linhas curtas, sem cortar frase no meio
 - se houver GIF, só mencione o link da animação quando for relevante
 - quando o usuário pedir GIF, retorne explicitamente o campo gif_url vindo da tool
 """
@@ -69,7 +70,7 @@ def _criar_agente():
         model=GEMINI_MODEL,
         google_api_key=GEMINI_API_KEY,
         temperature=0,
-        max_output_tokens=180,
+        max_output_tokens=320,
     )
 
     return create_react_agent(

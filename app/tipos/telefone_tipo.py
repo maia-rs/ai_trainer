@@ -10,9 +10,17 @@ class TelefoneValue:
 
         """Inicializa o objeto TelefoneValue a partir de uma string de telefone."""
 
-        # Remove parênteses, espaços e traços para limpar a string
+        # Remove tudo que não for dígito
         numero_limpo = re.sub(r'\D', '', numero_texto)
-        
+
+        # Remove zeros de discagem à esquerda quando houver excesso de dígitos
+        while len(numero_limpo) > 11 and numero_limpo.startswith("0"):
+            numero_limpo = numero_limpo[1:]
+
+        # Aceita DDI do Brasil (55) para entradas com 12/13 dígitos
+        if len(numero_limpo) in (12, 13) and numero_limpo.startswith("55"):
+            numero_limpo = numero_limpo[2:]
+
         # Valida se tem 10 (fixo) ou 11 (celular) dígitos
         if len(numero_limpo) not in [10, 11]:
             raise ValueError("Telefone inválido! Deve conter DDD + 8 ou 9 dígitos.")
