@@ -63,7 +63,7 @@ def test_buscar_informacoes_exercicio_sucesso(monkeypatch):
     monkeypatch.setattr(buscar_exercicio_module, "ExercicioService", Service)
 
     resultado = buscar_exercicio_module.buscar_informacoes_exercicio.invoke(
-        {"consulta": "supino", "limite": 3}
+        {"consultas": ["supino"], "limite": 3}
     )
 
     assert resultado["count"] == 1
@@ -81,8 +81,50 @@ def test_buscar_informacoes_exercicio_sem_resultado(monkeypatch):
     monkeypatch.setattr(buscar_exercicio_module, "SessionLocal", lambda: DummySession())
     monkeypatch.setattr(buscar_exercicio_module, "ExercicioService", Service)
 
-    resultado = buscar_exercicio_module.buscar_informacoes_exercicio.invoke({"consulta": "xyz"})
+    resultado = buscar_exercicio_module.buscar_informacoes_exercicio.invoke(
+        {"consultas": ["xyz"]}
+    )
     assert "message" in resultado
+
+
+def test_buscar_informacoes_exercicio_reescreve_base_url_do_gif(monkeypatch):
+    class Service:
+        def __init__(self, session):
+            pass
+
+        def search_exercicios(self, nome=None, categoria=None, grupo_muscular=None, limite=5):
+            if nome == "sumo squat":
+                return [
+                    DummyObj(
+                        id="e2",
+                        id_externo="ext2",
+                        nome="Smith Sumo Squat",
+                        categoria="Pernas",
+                        grupo_muscular="Quadríceps",
+                        equipamento="Smith",
+                        instrucao="Executar",
+                        gif_url="https://orie.ia.br/exercises/videos/3142-dzz6BiV.gif",
+                    )
+                ]
+            return []
+
+    monkeypatch.setattr(buscar_exercicio_module, "SessionLocal", lambda: DummySession())
+    monkeypatch.setattr(buscar_exercicio_module, "ExercicioService", Service)
+    monkeypatch.setattr(
+        buscar_exercicio_module.config,
+        "BASE_URL",
+        "https://aitrainer.orie.ia.br",
+    )
+
+    resultado = buscar_exercicio_module.buscar_informacoes_exercicio.invoke(
+        {"consultas": ["sumo squat"], "limite": 1}
+    )
+
+    assert resultado["count"] == 1
+    assert (
+        resultado["items"][0]["gif_url"]
+        == "https://aitrainer.orie.ia.br/exercises/videos/3142-dzz6BiV.gif"
+    )
 
 
 def test_obter_progresso_sucesso(monkeypatch):

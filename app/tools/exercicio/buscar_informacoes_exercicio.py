@@ -1,7 +1,45 @@
 from langchain_core.tools import tool
+from urllib.parse import urlsplit
 
+from app.core import config
 from app.core.database import SessionLocal
 from app.service.exercicio_service import ExercicioService
+
+
+def _normalizar_gif_url(gif_url: str) -> str:
+    """Reescreve URLs de GIF internas para o BASE_URL atual."""
+    if not gif_url:
+        return gif_url
+
+    base = config.BASE_URL.rstrip("/")
+    valor = gif_url.strip()
+
+    if valor.startswith(f"{base}/"):
+        return valor
+
+    if valor.startswith("/exercises/"):
+        return f"{base}{valor}"
+
+    if valor.startswith("videos/") or valor.startswith("/videos/"):
+        return f"{base}/exercises/{valor.lstrip('/')}"
+
+    parsed = urlsplit(valor)
+    if not parsed.scheme or not parsed.netloc:
+        return valor
+
+    if parsed.path.startswith("/exercises/videos/"):
+        sufixo = parsed.path
+        if parsed.query:
+            sufixo = f"{sufixo}?{parsed.query}"
+        return f"{base}{sufixo}"
+
+    if parsed.path.startswith("/videos/"):
+        sufixo = f"/exercises{parsed.path}"
+        if parsed.query:
+            sufixo = f"{sufixo}?{parsed.query}"
+        return f"{base}{sufixo}"
+
+    return valor
 
 
 @tool
@@ -58,7 +96,7 @@ def buscar_informacoes_exercicio(consultas: list[str], limite: int = 5) -> dict:
                                 "grupo_muscular": item.grupo_muscular,
                                 "equipamento": item.equipamento,
                                 "instrucao": item.instrucao,
-                                "gif_url": item.gif_url,
+                                "gif_url": _normalizar_gif_url(item.gif_url),
                             }
                         )
             except ValueError:
