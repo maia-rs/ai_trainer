@@ -150,7 +150,9 @@ class WhatsappService:
             "media": url,
             "fileName": url.split("/")[-1],
         }
-        return self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload)
+        resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload)
+        logger.info("sendMedia para %s url=%s resultado=%s", numero, url, resultado)
+        return resultado
 
     def _post(self, url: str, payload: dict) -> bool:
         try:

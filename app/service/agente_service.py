@@ -133,8 +133,13 @@ class AgenteService:
 
         agente = _get_agente()
 
+        # Injeta o número no início para o agente usar diretamente nas tools
+        mensagem_com_contexto = (
+            f"[meu número de whatsapp é {thread_id}] {mensagem}"
+        )
+
         resultado = agente.invoke(
-            {"messages": [("human", mensagem)]},
+            {"messages": [("human", mensagem_com_contexto)]},
             config={"configurable": {"thread_id": thread_id}},
         )
 
