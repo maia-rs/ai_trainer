@@ -36,18 +36,13 @@ class WhatsappWebhookPayload(BaseModel):
         return message_id or None
 
     def get_numero(self) -> str | None:
-        """Retorna apenas os dígitos do número remetente no formato brasileiro (DDD + número)."""
+        """Retorna o número do remetente no formato que a Evolution usa para envio (com DDI)."""
         jid = self.data.key.remoteJid
         if not jid or self.data.key.fromMe:
             return None
-        # Remove sufixo @s.whatsapp.net ou @g.us (grupos)
         numero = jid.split("@")[0]
-        # Ignora mensagens de grupos
         if "-" in numero:
             return None
-        # Remove DDI 55 se presente, mantém apenas DDD + número (10 ou 11 dígitos)
-        if numero.startswith("55") and len(numero) > 11:
-            numero = numero[2:]
         return numero
 
     def get_numero_contexto(self) -> str | None:
