@@ -66,20 +66,23 @@ class WhatsappService:
 
         # Envia cada GIF como mídia
         for url in gifs:
-            self._enviar_midia(numero, url, caption="")
+            enviado = self._enviar_midia(numero, url, caption="")
+            if not enviado:
+                # Fallback: se a API de mídia falhar, envia o link como texto.
+                self._enviar_texto(numero, f"Não consegui enviar o GIF como mídia. Link: {url}")
 
     # ------------------------------------------------------------------
     # Métodos internos
     # ------------------------------------------------------------------
 
-    def _enviar_texto(self, numero: str, texto: str) -> None:
+    def _enviar_texto(self, numero: str, texto: str) -> bool:
         payload = {
             "number": numero,
             "text": texto,
         }
-        self._post(f"{self._base}/sendText/{EVOLUTION_INSTANCE}", payload)
+        return self._post(f"{self._base}/sendText/{EVOLUTION_INSTANCE}", payload)
 
-    def _enviar_midia(self, numero: str, url: str, caption: str = "") -> None:
+    def _enviar_midia(self, numero: str, url: str, caption: str = "") -> bool:
         """Envia imagem/GIF via URL."""
         payload = {
             "number": numero,
@@ -89,9 +92,9 @@ class WhatsappService:
             "media": url,
             "fileName": url.split("/")[-1],
         }
-        self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload)
+        return self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload)
 
-    def _post(self, url: str, payload: dict) -> None:
+    def _post(self, url: str, payload: dict) -> bool:
         try:
             resp = httpx.post(url, json=payload, headers=self._headers, timeout=15)
             if resp.status_code not in (200, 201):
@@ -99,5 +102,8 @@ class WhatsappService:
                     "Evolution API retornou %s para %s: %s",
                     resp.status_code, url, resp.text[:200],
                 )
+                return False
+            return True
         except httpx.RequestError as exc:
             logger.error("Erro ao chamar Evolution API (%s): %s", url, exc)
+            return False

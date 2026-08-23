@@ -131,6 +131,20 @@ class TestWhatsappService:
         assert svc._post.call_count == 1
         assert "sendText" in svc._post.call_args[0][0]
 
+    def test_fallback_link_quando_envio_de_midia_falha(self):
+        svc = WhatsappService()
+        svc._post = MagicMock(side_effect=[True, False, True])
+
+        texto = "Aqui está: http://localhost:8000/exercises/videos/0001.gif"
+        svc.enviar_resposta("5535999326493", texto)
+
+        assert svc._post.call_count == 3
+        chamadas = [c[0] for c in svc._post.call_args_list]
+        assert "sendText" in chamadas[0][0]
+        assert "sendMedia" in chamadas[1][0]
+        assert "sendText" in chamadas[2][0]
+        assert "Link:" in chamadas[2][1]["text"]
+
     def test_remove_links_vazios_de_gif_do_texto(self):
         svc = self._service()
         texto = (
