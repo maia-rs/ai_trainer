@@ -1,10 +1,14 @@
 # Ignorar arquivos de ambiente
 # Ignorar arquivos de ambiente
 .env
+.env.*
+!.env.docker.example
 
 # Virtual environment
 venv/
 env/
+.venv/
+.venv-*/
 
 # Byte-code files
 *.pyc
@@ -25,6 +29,24 @@ alembic/versions/
 
 # Logs
 *.log
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Coverage artifacts
+.coverage
+htmlcov/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local packages and binaries
+*.deb
 
 # Dataset de exercícios (repositório externo)
 exercises-dataset/
