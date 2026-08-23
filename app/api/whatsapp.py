@@ -26,6 +26,8 @@ router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 _agente_service = AgenteService()
 _whatsapp_service = WhatsappService()
+
+# Cache de deduplicação: message_id → timestamp
 _mensagens_processadas: dict[str, float] = {}
 
 
@@ -37,7 +39,7 @@ def _mensagem_duplicada(message_id: str) -> bool:
     agora = time.monotonic()
     ttl = max(EVOLUTION_DEDUP_TTL_SECONDS, 1)
 
-    # Limpa entradas expiradas para evitar crescimento indefinido.
+    # Limpa entradas expiradas
     expiradas = [mid for mid, ts in _mensagens_processadas.items() if agora - ts > ttl]
     for mid in expiradas:
         _mensagens_processadas.pop(mid, None)
@@ -49,31 +51,20 @@ def _mensagem_duplicada(message_id: str) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Verificação de token (opcional mas recomendado)
-# ---------------------------------------------------------------------------
-
 def _verificar_token(token: str | None) -> None:
-    """Rejeita requisições sem o token correto quando ele está configurado."""
     if _ambiente_producao() and not EVOLUTION_WEBHOOK_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Webhook token não configurado para ambiente de produção.",
         )
-
     if not EVOLUTION_WEBHOOK_TOKEN:
-        return  # token não configurado → aceita tudo (dev local)
-
+        return
     if token != EVOLUTION_WEBHOOK_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de webhook inválido.",
         )
 
-
-# ---------------------------------------------------------------------------
-# Endpoint principal
-# ---------------------------------------------------------------------------
 
 @router.post("/webhook")
 async def receber_mensagem(
@@ -84,10 +75,11 @@ async def receber_mensagem(
     Recebe eventos messages.upsert da Evolution API.
 
     Fluxo:
-    1. Valida o token de segurança (se configurado).
-    2. Ignora eventos que não sejam mensagens de texto recebidas.
-    3. Usa o número do remetente como thread_id (isolamento por usuário).
-    4. Envia a mensagem ao agente e devolve a resposta ao WhatsApp.
+    1. Valida token de segurança.
+    2. Ignora mensagens que não sejam texto recebido.
+    3. Usa o número normalizado (sem DDI) como thread_id — garante
+       isolamento por usuário e consistência com o banco.
+    4. Envia ao agente e devolve a resposta ao número original.
     """
     _verificar_token(x_webhook_token)
 
@@ -100,30 +92,33 @@ async def receber_mensagem(
         logger.warning("Payload de webhook inválido recebido")
         return {"status": "ignored", "reason": "invalid_payload"}
 
-    # Aceita apenas o evento de nova mensagem
     if payload_model.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
 
+    # Número para envio de resposta (formato original da Evolution)
     numero_destino = payload_model.get_numero()
     if not numero_destino:
         return {"status": "ignored", "reason": "no_valid_number"}
 
-    numero_contexto = payload_model.get_numero_contexto() or numero_destino
+    # Número normalizado (DDD + número) para usar como thread_id e no banco
+    thread_id = payload_model.get_numero_contexto() or numero_destino
 
     texto = payload_model.get_texto()
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}
 
+    # Deduplicação por message_id
     message_id = payload_model.get_message_id()
     if message_id and _mensagem_duplicada(message_id):
+        logger.info("Mensagem duplicada ignorada: %s", message_id)
         return {"status": "ignored", "reason": "duplicate_message"}
 
-    logger.info("Mensagem recebida de %s: %s", numero_destino, texto[:80])
+    logger.info("Mensagem recebida de %s (thread: %s): %s", numero_destino, thread_id, texto[:80])
 
     try:
         resultado = _agente_service.conversar(
             mensagem=texto,
-            thread_id=numero_contexto,
+            thread_id=thread_id,
         )
         resposta = resultado["resposta"]
     except Exception as exc:

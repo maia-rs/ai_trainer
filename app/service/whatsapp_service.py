@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 _MAX_TEXT_CHARS = 850
 
 # Regex para detectar URLs de GIF na resposta do agente
-_GIF_PATTERN = re.compile(r'https?://\S+\.gif\b', re.IGNORECASE)
+# Captura URLs diretas e dentro de markdown [texto](url) ou entre parênteses
+_GIF_PATTERN = re.compile(r'https?://[^\s\)\]]+\.gif', re.IGNORECASE)
 _EMPTY_MARKDOWN_LINK_PATTERN = re.compile(r'(?<!\!)\[[^\]]*\]\(\s*\)', re.IGNORECASE)
 _MARKDOWN_GIF_LINK_PATTERN = re.compile(
     r'(?<!\!)\[[^\]]*\]\((https?://[^\s)]+\.gif(?:\?[^\s)]*)?)\)',

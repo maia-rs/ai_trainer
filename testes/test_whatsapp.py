@@ -44,7 +44,8 @@ class TestWhatsappWebhookPayload:
 
     def test_get_numero_retorna_digitos(self):
         p = WhatsappWebhookPayload(**_payload())
-        assert p.get_numero() == "5535999326493"
+        # get_numero remove o DDI 55, retorna DDD + número
+        assert p.get_numero() == "35999326493"
 
     def test_get_numero_ignora_from_me(self):
         p = WhatsappWebhookPayload(**_payload(from_me=True))
@@ -237,7 +238,7 @@ class TestWebhookEndpoint:
     def test_resposta_enviada_ao_whatsapp(self):
         self.client.post("/whatsapp/webhook", json=_payload())
         self.mock_wpp.enviar_resposta.assert_called_once_with(
-            "5535999326493", "Resposta do agente"
+            "35999326493", "Resposta do agente"
         )
 
     def test_evento_ignorado_retorna_ignored(self):
