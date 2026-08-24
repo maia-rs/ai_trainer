@@ -21,12 +21,20 @@ def atualizar_exercicio_treino(
         treino_exercicio_service = TreinoExercicioService(session)
 
         try:
-            payload = TreinoExercicioUpdate(
-                series=series,
-                repeticoes=repeticoes,
-                descanso=descanso,
-                observacoes=observacoes,
-            )
+            campos: dict = {}
+            if series is not None:
+                campos["series"] = series
+            if repeticoes is not None:
+                campos["repeticoes"] = repeticoes
+            if descanso is not None:
+                campos["descanso"] = descanso
+            if observacoes is not None:
+                campos["observacoes"] = observacoes
+
+            if not campos:
+                return {"error": "Nenhum campo fornecido para atualização."}
+
+            payload = TreinoExercicioUpdate(**campos)
             relacao = treino_exercicio_service.atualizar_treino_exercicio(
                 treino_exercicio_id,
                 payload,

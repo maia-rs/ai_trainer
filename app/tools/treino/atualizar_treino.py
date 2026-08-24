@@ -21,12 +21,20 @@ def atualizar_treino(
         treino_service = TreinoService(session)
 
         try:
-            payload = TreinoUpdate(
-                nome=nome,
-                descricao=descricao,
-                dia_da_semana=dia_da_semana,
-                status=status,
-            )
+            campos: dict = {}
+            if nome is not None:
+                campos["nome"] = nome
+            if descricao is not None:
+                campos["descricao"] = descricao
+            if dia_da_semana is not None:
+                campos["dia_da_semana"] = dia_da_semana
+            if status is not None:
+                campos["status"] = status
+
+            if not campos:
+                return {"error": "Nenhum campo fornecido para atualização."}
+
+            payload = TreinoUpdate(**campos)
             treino = treino_service.atualizar_treino(treino_id, payload)
             if not treino:
                 return {"message": "Treino nao encontrado."}
