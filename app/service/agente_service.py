@@ -5,7 +5,7 @@ from typing import Any
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 from app.core.config import (
     GEMINI_API_KEY,
@@ -83,12 +83,12 @@ def _criar_agente():
         temperature=0,
     )
 
-    return create_react_agent(
+    return create_agent(
         model=llm,
         tools=get_agent_tools(),
         checkpointer=MemorySaver(),
         prompt=SystemMessage(content=_SYSTEM_PROMPT),
-        handle_tool_errors=True,
+        
     )
 
 

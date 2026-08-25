@@ -8,7 +8,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_progresso(
     usuario_id: str,
     exercicio_id: str | None = None,
@@ -66,8 +66,9 @@ def obter_progresso(
                 "ultima_execucao": execucoes[0].model_dump() if execucoes else None,
                 "ultima_avaliacao_fisica": ultima_avaliacao,
             }
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+            # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao obter progresso: {str(e)}"}
 
     finally:
         session.close()

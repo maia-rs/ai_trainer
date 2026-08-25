@@ -7,7 +7,7 @@ from app.schemas.avaliacao_fisica import AvaliacaoFisicaUpdate
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def atualizar_avaliacao_fisica(
     avaliacao_id: str,
     peso: float | None = None,
@@ -67,8 +67,9 @@ def atualizar_avaliacao_fisica(
             if not avaliacao:
                 return {"message": "Avaliacao nao encontrada."}
             return avaliacao.model_dump()
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+        # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao atualizar avaliação: {str(e)}"}
 
     finally:
         session.close()

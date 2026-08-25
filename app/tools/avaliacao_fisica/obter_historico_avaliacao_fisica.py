@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_historico_avaliacao_fisica(usuario_id: str) -> dict:
     """Retorna o historico de avaliacoes fisicas do usuario."""
 
@@ -19,8 +19,10 @@ def obter_historico_avaliacao_fisica(usuario_id: str) -> dict:
                 "count": len(avaliacoes),
                 "items": [item.model_dump() for item in avaliacoes],
             }
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+                # Captura QUALQUER exceção para sempre responder com ToolMessage
+                    return {"status": "erro", "mensagem": f"Erro interno ao obter histórico de avaliações: {str(e)}"}
+        
 
     finally:
         session.close()

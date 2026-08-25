@@ -5,7 +5,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_ultima_execucao(usuario_id: str, exercicio_id: str | None = None) -> dict:
     """Retorna a ultima execucao de treino do usuario."""
 
@@ -33,8 +33,9 @@ def obter_ultima_execucao(usuario_id: str, exercicio_id: str | None = None) -> d
 
             ultima = sorted(execucoes, key=lambda item: item.data_execucao, reverse=True)[0]
             return ultima.model_dump()
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+            # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao obter última execução: {str(e)}"}
 
     finally:
         session.close()

@@ -6,7 +6,7 @@ from app.core.database import SessionLocal
 from app.schemas.avaliacao_fisica import AvaliacaoFisicaCreate
 from app.service.avaliacao_service import AvaliacaoService
 
-@tool(handle_tool_error=True)
+@tool
 def registrar_avaliacao_fisica(
     usuario_id: str,
     peso: float,
@@ -50,8 +50,10 @@ def registrar_avaliacao_fisica(
             )
             avaliacao = avaliacao_service.criar_avaliacao(payload)
             return avaliacao.model_dump()
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+                # Captura QUALQUER exceção para sempre responder com ToolMessage
+                    return {"status": "erro", "mensagem": f"Erro interno ao registrar avaliação: {str(e)}"}
+        
 
     finally:
         session.close()

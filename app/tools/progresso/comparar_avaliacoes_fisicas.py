@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.progresso_service import ProgressoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def comparar_avaliacoes_fisicas(avaliacao_id_1: str, avaliacao_id_2: str) -> dict:
     """Compara duas avaliacoes fisicas e retorna os principais indicadores."""
 
@@ -19,8 +19,9 @@ def comparar_avaliacoes_fisicas(avaliacao_id_1: str, avaliacao_id_2: str) -> dic
                 avaliacao_id_2,
             )
             return comparacao
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+            # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao comparar avaliações físicas: {str(e)}"}
 
     finally:
         session.close()

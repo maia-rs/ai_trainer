@@ -20,7 +20,7 @@ def _serializar_objeto(item):
     return item
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_progresso_exercicio(exercicio_id: str, periodo_dias: int = 30) -> dict:
     """Retorna progresso de um exercicio no periodo informado."""
 
@@ -40,8 +40,9 @@ def obter_progresso_exercicio(exercicio_id: str, periodo_dias: int = 30) -> dict
                 "count": len(execucoes),
                 "items": [_serializar_objeto(item) for item in execucoes],
             }
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+                # Captura QUALQUER exceção para sempre responder com ToolMessage
+                    return {"status": "erro", "mensagem": f"Erro interno ao obter progresso do exercício: {str(e)}"}
 
     finally:
         session.close()

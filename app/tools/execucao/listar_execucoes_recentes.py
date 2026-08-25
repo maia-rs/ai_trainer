@@ -9,7 +9,7 @@ from app.service.treino_exercicio import TreinoExercicioService
 from app.service.treino_service import TreinoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def listar_execucoes_recentes(
     usuario_id: str,
     ultimos_dias: int = 7,
@@ -89,8 +89,8 @@ def listar_execucoes_recentes(
             "total": len(itens),
             "execucoes": itens,
         }
-
-    except ValueError as e:
-        return {"error": str(e)}
+    except Exception as e:
+        # Captura QUALQUER exceção para sempre responder com ToolMessage
+        return {"status": "erro", "mensagem": f"Erro interno ao listar execuções recentes: {str(e)}"}
     finally:
         session.close()

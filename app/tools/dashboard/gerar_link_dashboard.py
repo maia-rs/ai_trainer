@@ -9,7 +9,7 @@ from app.service.dashboard_token_service import DashboardTokenService
 _BRT = timezone(timedelta(hours=-3))
 
 
-@tool(handle_tool_error=True)
+@tool
 def gerar_link_dashboard(usuario_id: str, expira_em_minutos: int = 60) -> dict:
     """Gera um link temporario e seguro para o dashboard do usuario.
 

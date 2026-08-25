@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_avaliacao_fisica(usuario_id: str, somente_ultima: bool = True) -> dict:
     """Retorna a avaliacao fisica de um usuario."""
 
@@ -23,8 +23,10 @@ def obter_avaliacao_fisica(usuario_id: str, somente_ultima: bool = True) -> dict
                 "count": len(avaliacoes),
                 "items": [item.model_dump() for item in avaliacoes],
             }
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+                # Captura QUALQUER exceção para sempre responder com ToolMessage
+                    return {"status": "erro", "mensagem": f"Erro interno ao obter avaliação: {str(e)}"}
+        
 
     finally:
         session.close()

@@ -7,7 +7,7 @@ from app.schemas.execucao import ExecucaoCreate
 from app.service.execucao_service import ExecucaoService
 
 
-@tool(handle_tool_error=True)
+@tool
 def registrar_execucao_treino(
     usuario_id: str,
     treino_exercicio_id: str,
@@ -49,8 +49,9 @@ def registrar_execucao_treino(
             )
             execucao = execucao_service.registrar_execucao(payload)
             return execucao.model_dump()
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+            # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao registrar execução: {str(e)}"}
 
     finally:
         session.close()

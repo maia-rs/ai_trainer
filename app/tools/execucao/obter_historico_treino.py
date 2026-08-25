@@ -7,7 +7,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool(handle_tool_error=True)
+@tool
 def obter_historico_treino(
     usuario_id: str,
     periodo_dias: int | None = None,
@@ -50,8 +50,9 @@ def obter_historico_treino(
                 "count": len(execucoes),
                 "items": [item.model_dump() for item in execucoes],
             }
-        except ValueError as e:
-            return {"error": str(e)}
+        except Exception as e:
+        # Captura QUALQUER exceção para sempre responder com ToolMessage
+            return {"status": "erro", "mensagem": f"Erro interno ao obter histórico de treino: {str(e)}"}
 
     finally:
         session.close()
