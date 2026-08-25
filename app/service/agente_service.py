@@ -88,6 +88,7 @@ def _criar_agente():
         tools=get_agent_tools(),
         checkpointer=MemorySaver(),
         prompt=SystemMessage(content=_SYSTEM_PROMPT),
+        handle_tool_errors=True,
     )
 
 
