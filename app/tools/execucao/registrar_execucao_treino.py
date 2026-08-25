@@ -7,7 +7,7 @@ from app.schemas.execucao import ExecucaoCreate
 from app.service.execucao_service import ExecucaoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def registrar_execucao_treino(
     usuario_id: str,
     treino_exercicio_id: str,

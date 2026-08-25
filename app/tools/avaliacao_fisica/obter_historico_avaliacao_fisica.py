@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_historico_avaliacao_fisica(usuario_id: str) -> dict:
     """Retorna o historico de avaliacoes fisicas do usuario."""
 

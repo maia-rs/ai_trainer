@@ -5,7 +5,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_ultima_execucao(usuario_id: str, exercicio_id: str | None = None) -> dict:
     """Retorna a ultima execucao de treino do usuario."""
 

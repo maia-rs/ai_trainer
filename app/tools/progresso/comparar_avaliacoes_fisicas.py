@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.progresso_service import ProgressoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def comparar_avaliacoes_fisicas(avaliacao_id_1: str, avaliacao_id_2: str) -> dict:
     """Compara duas avaliacoes fisicas e retorna os principais indicadores."""
 

@@ -42,7 +42,7 @@ def _normalizar_gif_url(gif_url: str) -> str:
     return valor
 
 
-@tool
+@tool(handle_tool_error=True)
 def buscar_informacoes_exercicio(consultas: list[str], limite: int = 5) -> dict:
     """Busca exercicios no catalogo interno por nome, categoria, rotulo,
     grupo muscular ou equipamento.

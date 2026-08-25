@@ -7,7 +7,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_historico_treino(
     usuario_id: str,
     periodo_dias: int | None = None,

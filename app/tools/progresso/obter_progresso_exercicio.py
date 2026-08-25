@@ -20,7 +20,7 @@ def _serializar_objeto(item):
     return item
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_progresso_exercicio(exercicio_id: str, periodo_dias: int = 30) -> dict:
     """Retorna progresso de um exercicio no periodo informado."""
 

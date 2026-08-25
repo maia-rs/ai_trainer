@@ -9,7 +9,7 @@ from app.service.treino_exercicio import TreinoExercicioService
 from app.service.treino_service import TreinoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def listar_execucoes_recentes(
     usuario_id: str,
     ultimos_dias: int = 7,

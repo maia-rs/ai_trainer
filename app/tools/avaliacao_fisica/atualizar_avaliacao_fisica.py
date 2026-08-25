@@ -7,7 +7,7 @@ from app.schemas.avaliacao_fisica import AvaliacaoFisicaUpdate
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def atualizar_avaliacao_fisica(
     avaliacao_id: str,
     peso: float | None = None,

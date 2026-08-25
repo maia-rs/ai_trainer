@@ -4,7 +4,7 @@ from app.core.database import SessionLocal
 from app.service.avaliacao_service import AvaliacaoService
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_avaliacao_fisica(usuario_id: str, somente_ultima: bool = True) -> dict:
     """Retorna a avaliacao fisica de um usuario."""
 

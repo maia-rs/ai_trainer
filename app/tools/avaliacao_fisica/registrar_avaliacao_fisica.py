@@ -6,8 +6,7 @@ from app.core.database import SessionLocal
 from app.schemas.avaliacao_fisica import AvaliacaoFisicaCreate
 from app.service.avaliacao_service import AvaliacaoService
 
-
-@tool
+@tool(handle_tool_error=True)
 def registrar_avaliacao_fisica(
     usuario_id: str,
     peso: float,

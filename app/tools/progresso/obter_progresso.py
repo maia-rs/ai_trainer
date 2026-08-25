@@ -8,7 +8,7 @@ from app.service.execucao_service import ExecucaoService
 from app.service.treino_exercicio import TreinoExercicioService
 
 
-@tool
+@tool(handle_tool_error=True)
 def obter_progresso(
     usuario_id: str,
     exercicio_id: str | None = None,
