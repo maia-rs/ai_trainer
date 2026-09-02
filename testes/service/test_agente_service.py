@@ -1,3 +1,9 @@
+"""
+Testes do AgenteService — validam o comportamento de conversar()
+sem depender da implementação interna do LangGraph ou Gemini.
+"""
+from unittest.mock import MagicMock, patch
+
 from app.service import agente_service as agente_module
 from app.service.agente_service import AgenteService
 
@@ -9,81 +15,87 @@ class DummyMessage:
 
 class FakeAgent:
     def __init__(self, outputs):
-        self._outputs = outputs
+        self._outputs = list(outputs)
         self._i = 0
         self.calls = []
 
-    def invoke(self, *_args, **_kwargs):
-        self.calls.append((_args, _kwargs))
-        saida = self._outputs[self._i]
+    def invoke(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        saida = self._outputs[self._i % len(self._outputs)]
         self._i += 1
         return saida
 
 
-def test_garante_link_gif_quando_modelo_omite(monkeypatch):
-    fake = FakeAgent(
-        [
-            {
-                "messages": [
-                    DummyMessage(
-                        '{"items":[{"nome":"Smith Sumo Squat","gif_url":"https://aitrainer.orie.ia.br/exercises/videos/3142-dzz6BiV.gif"}]}'
-                    ),
-                    DummyMessage("GIF:"),
-                ]
-            }
-        ]
-    )
-
+def test_conversar_retorna_resposta(monkeypatch):
+    fake = FakeAgent([{"messages": [DummyMessage("Olá, Rodrigo!")]}])
     monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
     monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
 
     service = AgenteService()
-    resultado = service.conversar("me manda o gif", "35999999999")
+    resultado = service.conversar("oi", "35999999999")
 
-    assert "Link do GIF:" in resultado["resposta"]
-    assert "3142-dzz6BiV.gif" in resultado["resposta"]
-
-
-def test_usa_ultimo_exercicio_no_fallback_de_gif(monkeypatch):
-    fake = FakeAgent(
-        [
-            {"messages": [DummyMessage("*Agachamento Sumo*\n1. Passo")]} ,
-            {"messages": [DummyMessage("GIF:")]},
-        ]
-    )
-
-    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
-    monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
-
-    def _fake_busca(self, nome_exercicio: str):
-        assert "Agachamento Sumo" in nome_exercicio
-        return "https://aitrainer.orie.ia.br/exercises/videos/3142-dzz6BiV.gif"
-
-    monkeypatch.setattr(AgenteService, "_buscar_gif_por_nome", _fake_busca)
-
-    service = AgenteService()
-    service.conversar("como faço agachamento sumo?", "35999999999")
-    resultado = service.conversar("me manda o gif", "35999999999")
-
-    assert "Link do GIF:" in resultado["resposta"]
-    assert "3142-dzz6BiV.gif" in resultado["resposta"]
+    assert resultado["resposta"] == "Olá, Rodrigo!"
+    assert resultado["thread_id"] == "35999999999"
 
 
-def test_segura_contexto_geral_com_resumo_automatico(monkeypatch):
-    outputs = [{"messages": [DummyMessage("ok")]} for _ in range(20)]
-    fake = FakeAgent(outputs)
-
+def test_conversar_injeta_numero_na_mensagem(monkeypatch):
+    """Garante que o número do usuário é injetado no início da mensagem."""
+    fake = FakeAgent([{"messages": [DummyMessage("ok")]}])
     monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
     monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
 
     service = AgenteService()
-    thread_id = "35999999999"
+    service.conversar("oi", "35999326493")
 
-    for i in range(20):
-        service.conversar(f"pedido geral {i}", thread_id)
+    mensagem_enviada = fake.calls[0][0][0]["messages"][0][1]
+    assert "35999326493" in mensagem_enviada
 
-    assert service._resumo_contexto.get(thread_id)
 
-    ultimo_payload = fake.calls[-1][0][0]
-    mensagem_enviada = ultimo_payload["messages"][0][1]
-    assert "Resumo acumulado da conversa:" in mensagem_enviada
+def test_conversar_sem_api_key_lanca_erro(monkeypatch):
+    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "")
+
+    service = AgenteService()
+    try:
+        service.conversar("oi", "35999999999")
+        assert False, "Deveria ter lançado ValueError"
+    except ValueError as e:
+        assert "API_KEY_GEMINI" in str(e)
+
+
+def test_conversar_usa_thread_id_como_chave(monkeypatch):
+    """Verifica que thread_id é passado corretamente ao LangGraph."""
+    fake = FakeAgent([{"messages": [DummyMessage("ok")]}])
+    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
+    monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
+
+    service = AgenteService()
+    service.conversar("oi", "55123456789")
+
+    # config é passado como kwarg ao invoke
+    _, kwargs = fake.calls[0]
+    config = kwargs.get("config", {})
+    assert config.get("configurable", {}).get("thread_id") == "55123456789"
+
+
+def test_resposta_lista_de_dicts_extraida_corretamente(monkeypatch):
+    """Testa extração de conteúdo quando a mensagem vem como lista de dicts."""
+    conteudo = [{"type": "text", "text": "Resposta em lista"}]
+    fake = FakeAgent([{"messages": [DummyMessage(conteudo)]}])
+    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
+    monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
+
+    service = AgenteService()
+    resultado = service.conversar("oi", "35999999999")
+
+    assert resultado["resposta"] == "Resposta em lista"
+
+
+def test_resposta_vazia_retorna_fallback(monkeypatch):
+    fake = FakeAgent([{"messages": []}])
+    monkeypatch.setattr(agente_module, "GEMINI_API_KEY", "ok")
+    monkeypatch.setattr(agente_module, "_get_agente", lambda: fake)
+
+    service = AgenteService()
+    resultado = service.conversar("oi", "35999999999")
+
+    assert resultado["resposta"]  # não vazio

@@ -52,10 +52,10 @@ def test_atualizar_exercicio_treino_nao_encontrado(monkeypatch):
     monkeypatch.setattr(atualizar_module, "SessionLocal", lambda: DummySession())
     monkeypatch.setattr(atualizar_module, "TreinoExercicioService", Service)
 
+    # Passa campo válido para chegar até o service
     resultado = atualizar_module.atualizar_exercicio_treino.invoke(
-        {"treino_exercicio_id": "x"}
+        {"treino_exercicio_id": "x", "series": 4}
     )
-
     assert resultado == {"message": "Relacao treino-exercicio nao encontrada."}
 
 

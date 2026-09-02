@@ -52,7 +52,10 @@ def test_atualizar_treino_nao_encontrado(monkeypatch):
     monkeypatch.setattr(atualizar_treino_module, "SessionLocal", lambda: DummySession())
     monkeypatch.setattr(atualizar_treino_module, "TreinoService", Service)
 
-    resultado = atualizar_treino_module.atualizar_treino.invoke({"treino_id": "inexistente"})
+    # Passa um campo válido — sem campos a tool retorna erro de validação antes de chamar o service
+    resultado = atualizar_treino_module.atualizar_treino.invoke(
+        {"treino_id": "inexistente", "nome": "Novo Nome"}
+    )
     assert resultado == {"message": "Treino nao encontrado."}
 
 

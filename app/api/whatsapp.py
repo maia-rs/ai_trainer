@@ -107,6 +107,10 @@ async def receber_mensagem(
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}
 
+    # Ignora mensagens muito curtas que provavelmente são notificações de status
+    if len(texto.strip()) < 2:
+        return {"status": "ignored", "reason": "message_too_short"}
+
     # Deduplicação por message_id
     message_id = payload_model.get_message_id()
     if message_id and _mensagem_duplicada(message_id):
