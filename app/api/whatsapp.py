@@ -89,7 +89,11 @@ async def receber_mensagem(
 
     try:
         payload_model = WhatsappWebhookPayload.model_validate(payload)
-    except Exception:
+    except Exception as e:
+        # Log do payload para diagnóstico quando falha a validação
+        mt = payload.get("data", {}).get("messageType", "?")
+        ev = payload.get("event", "?")
+        print(f"VALIDATE FAIL — event={ev} messageType={mt} error={str(e)[:100]}", flush=True)
         logger.warning("Payload de webhook inválido recebido")
         return {"status": "ignored", "reason": "invalid_payload"}
 
