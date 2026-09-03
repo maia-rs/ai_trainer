@@ -87,26 +87,32 @@ async def receber_mensagem(
     if not isinstance(payload, dict):
         return {"status": "ignored", "reason": "invalid_payload"}
 
+    # A Evolution envia `data` como lista em alguns eventos (chats.update, contacts.update)
+    # Normaliza para o primeiro item quando for lista
+    if isinstance(payload.get("data"), list):
+        data_list = payload["data"]
+        if not data_list:
+            return {"status": "ignored", "reason": "empty_data_list"}
+        payload = {**payload, "data": data_list[0]}
+
     try:
         payload_model = WhatsappWebhookPayload.model_validate(payload)
     except Exception as e:
-        # Log do payload para diagnóstico quando falha a validação
-        mt = payload.get("data", {}).get("messageType", "?")
+        mt = payload.get("data", {}).get("messageType", "?") if isinstance(payload.get("data"), dict) else "?"
         ev = payload.get("event", "?")
         print(f"VALIDATE FAIL — event={ev} messageType={mt} error={str(e)[:100]}", flush=True)
         logger.warning("Payload de webhook inválido recebido")
         return {"status": "ignored", "reason": "invalid_payload"}
 
     # Log temporário para diagnóstico de áudio
-    if payload.get("data", {}).get("messageType") in ("audioMessage", "pttMessage"):
-        logger.info("AUDIO RAW — messageType=%s data_keys=%s",
-                    payload.get("data", {}).get("messageType"),
-                    list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else [])
+    if payload.get("data", {}).get("messageType") in ("audioMessage", "pttMessage") if isinstance(payload.get("data"), dict) else False:
+        mt = payload["data"].get("messageType")
+        msg_keys = list(payload["data"].get("message", {}).keys())
+        print(f"AUDIO RAW — messageType={mt} message_keys={msg_keys}", flush=True)
     else:
-        # Log de qualquer messageType que chegue para diagnóstico
-        mt = payload.get("data", {}).get("messageType", "N/A")
+        mt = payload.get("data", {}).get("messageType", "N/A") if isinstance(payload.get("data"), dict) else "N/A"
         ev = payload.get("event", "N/A")
-        msg_keys = list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else []
+        msg_keys = list(payload.get("data", {}).get("message", {}).keys()) if isinstance(payload.get("data"), dict) and payload.get("data", {}).get("message") else []
         logger.info("WEBHOOK RAW — event=%s messageType=%s message_keys=%s", ev, mt, msg_keys)
         print(f"WEBHOOK RAW — event={ev} messageType={mt} message_keys={msg_keys}", flush=True)
 
