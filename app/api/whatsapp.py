@@ -109,8 +109,11 @@ async def receber_mensagem(
     # Se for áudio, tenta transcrever
     if not texto and payload_model.is_audio():
         audio_url = payload_model.get_audio_url()
+        logger.info("DEBUG audio — is_audio=%s url=%s messageType=%s audioMessage=%s",
+                    payload_model.is_audio(), audio_url,
+                    payload_model.data.messageType,
+                    str(payload_model.data.message.audioMessage)[:200] if payload_model.data.message and payload_model.data.message.audioMessage else None)
         if audio_url:
-            logger.info("Áudio recebido de %s, URL: %s", numero_destino, audio_url[:100])
             try:
                 transcricao_service = TranscricaoService()
                 texto = transcricao_service.transcrever_url(audio_url)
