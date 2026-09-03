@@ -104,6 +104,7 @@ async def receber_mensagem(
         ev = payload.get("event", "N/A")
         msg_keys = list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else []
         logger.info("WEBHOOK RAW — event=%s messageType=%s message_keys=%s", ev, mt, msg_keys)
+        print(f"WEBHOOK RAW — event={ev} messageType={mt} message_keys={msg_keys}", flush=True)
 
     if payload_model.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
