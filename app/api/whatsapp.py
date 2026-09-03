@@ -93,6 +93,12 @@ async def receber_mensagem(
         logger.warning("Payload de webhook inválido recebido")
         return {"status": "ignored", "reason": "invalid_payload"}
 
+    # Log temporário para diagnóstico de áudio
+    if payload.get("data", {}).get("messageType") in ("audioMessage", "pttMessage"):
+        logger.info("AUDIO RAW — messageType=%s data_keys=%s",
+                    payload.get("data", {}).get("messageType"),
+                    list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else [])
+
     if payload_model.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
 
@@ -109,10 +115,15 @@ async def receber_mensagem(
     # Se for áudio, tenta transcrever
     if not texto and payload_model.is_audio():
         audio_url = payload_model.get_audio_url()
-        logger.info("DEBUG audio — is_audio=%s url=%s messageType=%s audioMessage=%s",
-                    payload_model.is_audio(), audio_url,
-                    payload_model.data.messageType,
-                    str(payload_model.data.message.audioMessage)[:200] if payload_model.data.message and payload_model.data.message.audioMessage else None)
+        # Log de diagnóstico — remove após resolver
+        msg_data = payload_model.data.message
+        logger.info(
+            "DEBUG audio — is_audio=%s url=%s messageType=%s audioMessage_keys=%s",
+            payload_model.is_audio(),
+            audio_url,
+            payload_model.data.messageType,
+            list(msg_data.audioMessage.keys()) if msg_data and msg_data.audioMessage else None,
+        )
         if audio_url:
             try:
                 transcricao_service = TranscricaoService()
