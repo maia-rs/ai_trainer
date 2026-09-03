@@ -98,6 +98,12 @@ async def receber_mensagem(
         logger.info("AUDIO RAW — messageType=%s data_keys=%s",
                     payload.get("data", {}).get("messageType"),
                     list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else [])
+    else:
+        # Log de qualquer messageType que chegue para diagnóstico
+        mt = payload.get("data", {}).get("messageType", "N/A")
+        ev = payload.get("event", "N/A")
+        msg_keys = list(payload.get("data", {}).get("message", {}).keys()) if payload.get("data", {}).get("message") else []
+        logger.info("WEBHOOK RAW — event=%s messageType=%s message_keys=%s", ev, mt, msg_keys)
 
     if payload_model.event not in ("messages.upsert", "message.upsert"):
         return {"status": "ignored", "reason": "event_not_handled"}
