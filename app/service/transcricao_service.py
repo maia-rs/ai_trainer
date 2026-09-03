@@ -92,17 +92,40 @@ class TranscricaoService:
     def transcrever_url(self, url: str, idioma: str = "pt") -> str:
         """Baixa o áudio de uma URL e transcreve."""
         logger.info("Baixando áudio de %s", url)
+
+        # Headers para download — inclui autenticação da Evolution API se a URL for do servidor
+        from app.core.config import EVOLUTION_API_KEY
+        headers = {}
+        if EVOLUTION_API_KEY and ("evolution" in url or "wppapi" in url or "wpp" in url):
+            headers["apikey"] = EVOLUTION_API_KEY
+
         try:
-            resp = httpx.get(url, timeout=30, follow_redirects=True)
+            resp = httpx.get(url, timeout=30, follow_redirects=True, headers=headers)
             resp.raise_for_status()
         except httpx.HTTPError as e:
             raise RuntimeError(f"Erro ao baixar áudio: {e}") from e
 
-        # Detecta extensão pela URL ou usa .ogg (padrão WhatsApp)
+        # Verifica se recebeu áudio de verdade (não HTML de erro)
+        content_type = resp.headers.get("content-type", "")
+        if "text/html" in content_type or len(resp.content) < 100:
+            raise RuntimeError(
+                f"URL retornou conteúdo inválido (content-type: {content_type}, "
+                f"tamanho: {len(resp.content)} bytes). Verifique as credenciais de acesso."
+            )
+
+        # Detecta extensão pela URL ou pelo content-type
         nome = url.split("/")[-1].split("?")[0] or "audio.ogg"
         if "." not in nome:
-            nome = "audio.ogg"
+            if "ogg" in content_type or "opus" in content_type:
+                nome = "audio.ogg"
+            elif "mpeg" in content_type or "mp3" in content_type:
+                nome = "audio.mp3"
+            elif "mp4" in content_type or "m4a" in content_type:
+                nome = "audio.m4a"
+            else:
+                nome = "audio.ogg"
 
+        logger.info("Áudio baixado: %d bytes, content-type: %s", len(resp.content), content_type)
         return self._chamar_api(resp.content, nome, idioma)
 
     def _chamar_api(self, dados: bytes, nome_arquivo: str, idioma: str) -> str:
