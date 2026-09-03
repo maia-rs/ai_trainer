@@ -15,6 +15,8 @@ class WhatsappMessageKey(BaseModel):
 class WhatsappMessageContent(BaseModel):
     conversation: str | None = None
     extendedTextMessage: dict[str, Any] | None = None
+    audioMessage: dict[str, Any] | None = None
+    imageMessage: dict[str, Any] | None = None
 
 
 class WhatsappMessageData(BaseModel):
@@ -76,3 +78,17 @@ class WhatsappWebhookPayload(BaseModel):
         if msg.extendedTextMessage:
             return (msg.extendedTextMessage.get("text") or "").strip() or None
         return None
+
+    def is_audio(self) -> bool:
+        """Retorna True se a mensagem for um áudio."""
+        msg = self.data.message
+        if not msg:
+            return False
+        return msg.audioMessage is not None or self.data.messageType in ("audioMessage", "pttMessage")
+
+    def get_audio_url(self) -> str | None:
+        """Retorna a URL de download do áudio, se disponível."""
+        msg = self.data.message
+        if not msg or not msg.audioMessage:
+            return None
+        return msg.audioMessage.get("url") or msg.audioMessage.get("mediaUrl") or None

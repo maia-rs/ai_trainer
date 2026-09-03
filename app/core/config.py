@@ -22,6 +22,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 API_KEY = os.getenv("API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", API_KEY)
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 
 # Gemini
 GEMINI_API_KEY = os.getenv("API_KEY_GEMINI", "")

@@ -18,6 +18,7 @@ from app.core.config import (
 )
 from app.schemas.whatsapp import WhatsappWebhookPayload
 from app.service.agente_service import AgenteService
+from app.service.transcricao_service import TranscricaoService
 from app.service.whatsapp_service import WhatsappService
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,25 @@ async def receber_mensagem(
     thread_id = payload_model.get_numero_contexto() or numero_destino
 
     texto = payload_model.get_texto()
+
+    # Se for áudio, tenta transcrever
+    if not texto and payload_model.is_audio():
+        audio_url = payload_model.get_audio_url()
+        if audio_url:
+            try:
+                transcricao_service = TranscricaoService()
+                texto = transcricao_service.transcrever_url(audio_url)
+                logger.info("Áudio transcrito de %s: %s", numero_destino, texto[:80])
+            except Exception as exc:
+                logger.warning("Falha ao transcrever áudio: %s", exc)
+                _whatsapp_service.enviar_resposta(
+                    numero_destino,
+                    "Não consegui transcrever seu áudio. Pode escrever o que precisa?"
+                )
+                return {"status": "ignored", "reason": "audio_transcription_failed"}
+        else:
+            return {"status": "ignored", "reason": "audio_without_url"}
+
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}
 
