@@ -23,6 +23,46 @@ _GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 # Formatos suportados pelo Whisper via Groq
 _EXTENSOES_SUPORTADAS = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".ogg", ".opus"}
 
+# Magic bytes para detecção de formato
+_MAGIC_BYTES: list[tuple[bytes, str, str]] = [
+    (b"OggS", "audio.ogg", "audio/ogg"),
+    (b"ID3", "audio.mp3", "audio/mpeg"),
+    (b"\xff\xfb", "audio.mp3", "audio/mpeg"),
+    (b"\xff\xf3", "audio.mp3", "audio/mpeg"),
+    (b"\xff\xf2", "audio.mp3", "audio/mpeg"),
+    (b"RIFF", "audio.wav", "audio/wav"),
+    (b"fLaC", "audio.flac", "audio/flac"),
+    (b"\x1aE\xdf\xa3", "audio.webm", "audio/webm"),
+]
+
+
+def _detectar_mimetype(dados: bytes, nome_arquivo: str) -> str:
+    """Detecta o mimetype pelo conteúdo binário (magic bytes)."""
+    for magic, _, mime in _MAGIC_BYTES:
+        if dados[:len(magic)] == magic:
+            return mime
+
+    # Fallback: usa a extensão do nome
+    ext = Path(nome_arquivo).suffix.lower()
+    mapa = {
+        ".ogg": "audio/ogg", ".opus": "audio/ogg",
+        ".mp3": "audio/mpeg", ".mpeg": "audio/mpeg", ".mpga": "audio/mpeg",
+        ".mp4": "audio/mp4", ".m4a": "audio/mp4",
+        ".wav": "audio/wav", ".webm": "audio/webm",
+    }
+    return mapa.get(ext, "audio/ogg")  # ogg como fallback padrão do WhatsApp
+
+
+def _nome_com_extensao(nome: str, dados: bytes) -> str:
+    """Garante que o nome tem extensão compatível com o Whisper."""
+    if Path(nome).suffix.lower() in _EXTENSOES_SUPORTADAS:
+        return nome
+    # Detecta extensão pelos magic bytes
+    for magic, nome_padrao, _ in _MAGIC_BYTES:
+        if dados[:len(magic)] == magic:
+            return nome_padrao
+    return "audio.ogg"
+
 
 class TranscricaoService:
     """Transcreve áudio usando Groq Whisper API."""
@@ -67,11 +107,15 @@ class TranscricaoService:
 
     def _chamar_api(self, dados: bytes, nome_arquivo: str, idioma: str) -> str:
         """Chama a API de transcrição do Groq."""
+        # Garante extensão válida e detecta mimetype real pelos bytes
+        nome_final = _nome_com_extensao(nome_arquivo, dados)
+        mimetype = _detectar_mimetype(dados, nome_final)
+
         try:
             resp = httpx.post(
                 _GROQ_TRANSCRIPTION_URL,
                 headers=self._headers,
-                files={"file": (nome_arquivo, dados, "audio/ogg")},
+                files={"file": (nome_final, dados, mimetype)},
                 data={
                     "model": GROQ_WHISPER_MODEL,
                     "language": idioma,
