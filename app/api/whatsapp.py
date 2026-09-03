@@ -129,32 +129,55 @@ async def receber_mensagem(
 
     texto = payload_model.get_texto()
 
-    # Se for áudio, tenta transcrever
+    # Se for áudio, tenta transcrever via Evolution API (getBase64FromMediaMessage)
     if not texto and payload_model.is_audio():
-        audio_url = payload_model.get_audio_url()
-        # Log de diagnóstico — remove após resolver
-        msg_data = payload_model.data.message
+        message_id = payload_model.get_message_id()
+        remote_jid = payload_model.get_remote_jid()
         logger.info(
-            "DEBUG audio — is_audio=%s url=%s messageType=%s audioMessage_keys=%s",
-            payload_model.is_audio(),
-            audio_url,
-            payload_model.data.messageType,
-            list(msg_data.audioMessage.keys()) if msg_data and msg_data.audioMessage else None,
+            "Áudio recebido de %s — message_id=%s messageType=%s",
+            numero_destino, message_id, payload_model.data.messageType,
         )
-        if audio_url:
-            try:
-                transcricao_service = TranscricaoService()
-                texto = transcricao_service.transcrever_url(audio_url)
-                logger.info("Áudio transcrito de %s: %s", numero_destino, texto[:80])
-            except Exception as exc:
-                logger.warning("Falha ao transcrever áudio: %s", exc)
+        if message_id and remote_jid:
+            resultado_audio = _whatsapp_service.get_audio_base64(message_id, remote_jid)
+            if resultado_audio:
+                audio_bytes, mimetype = resultado_audio
+                # Deriva nome de arquivo a partir do mimetype para o Whisper reconhecer o formato
+                _MIME_TO_EXT = {
+                    "audio/ogg": "audio.ogg",
+                    "audio/opus": "audio.ogg",
+                    "audio/mpeg": "audio.mp3",
+                    "audio/mp3": "audio.mp3",
+                    "audio/mp4": "audio.m4a",
+                    "audio/m4a": "audio.m4a",
+                    "audio/wav": "audio.wav",
+                    "audio/webm": "audio.webm",
+                }
+                nome_arquivo = _MIME_TO_EXT.get(mimetype.lower().split(";")[0].strip(), "audio.ogg")
+                logger.info(
+                    "Áudio baixado via Evolution API: %d bytes, mimetype=%s → nome=%s",
+                    len(audio_bytes), mimetype, nome_arquivo,
+                )
+                try:
+                    transcricao_service = TranscricaoService()
+                    texto = transcricao_service.transcrever_bytes(audio_bytes, nome_arquivo)
+                    logger.info("Áudio transcrito de %s: %s", numero_destino, texto[:80])
+                except Exception as exc:
+                    logger.warning("Falha ao transcrever áudio: %s", exc)
+                    _whatsapp_service.enviar_resposta(
+                        numero_destino,
+                        "Não consegui transcrever seu áudio. Pode escrever o que precisa?"
+                    )
+                    return {"status": "ignored", "reason": "audio_transcription_failed"}
+            else:
+                logger.warning("Falha ao baixar áudio via Evolution API — message_id=%s", message_id)
                 _whatsapp_service.enviar_resposta(
                     numero_destino,
-                    "Não consegui transcrever seu áudio. Pode escrever o que precisa?"
+                    "Não consegui baixar seu áudio. Pode escrever o que precisa?"
                 )
-                return {"status": "ignored", "reason": "audio_transcription_failed"}
+                return {"status": "ignored", "reason": "audio_download_failed"}
         else:
-            return {"status": "ignored", "reason": "audio_without_url"}
+            logger.warning("Áudio sem message_id ou remote_jid — message_id=%s jid=%s", message_id, remote_jid)
+            return {"status": "ignored", "reason": "audio_missing_ids"}
 
     if not texto:
         return {"status": "ignored", "reason": "no_text_content"}

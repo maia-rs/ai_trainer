@@ -140,6 +140,45 @@ class WhatsappService:
 
         return blocos
 
+    def get_audio_base64(self, message_id: str, remote_jid: str) -> tuple[bytes, str] | None:
+        """
+        Baixa o áudio de uma mensagem via Evolution API getBase64FromMediaMessage.
+
+        Retorna (bytes_do_audio, mimetype) ou None em caso de falha.
+        O endpoint descriptografa o arquivo do WhatsApp e devolve o base64.
+        """
+        import base64
+
+        url = f"{EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/{EVOLUTION_INSTANCE}"
+        payload = {
+            "message": {
+                "key": {
+                    "id": message_id,
+                    "remoteJid": remote_jid,
+                }
+            },
+            "convertToMp4": False,
+        }
+        try:
+            resp = httpx.post(url, json=payload, headers=self._headers, timeout=30)
+            if resp.status_code not in (200, 201):
+                logger.warning(
+                    "getBase64FromMediaMessage retornou %s: %s",
+                    resp.status_code, resp.text[:300],
+                )
+                return None
+            data = resp.json()
+            b64 = data.get("base64") or data.get("data")
+            if not b64:
+                logger.warning("getBase64FromMediaMessage: campo base64 ausente na resposta")
+                return None
+            audio_bytes = base64.b64decode(b64)
+            mimetype = data.get("mimetype", "audio/ogg")
+            return audio_bytes, mimetype
+        except Exception as exc:
+            logger.error("Erro em get_audio_base64 (msg=%s): %s", message_id, exc)
+            return None
+
     def _enviar_midia(self, numero: str, url: str, caption: str = "") -> bool:
         """Envia imagem/GIF via URL."""
         payload = {

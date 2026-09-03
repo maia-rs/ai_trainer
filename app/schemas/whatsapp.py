@@ -92,3 +92,8 @@ class WhatsappWebhookPayload(BaseModel):
         if not msg or not msg.audioMessage:
             return None
         return msg.audioMessage.get("url") or msg.audioMessage.get("mediaUrl") or None
+
+    def get_remote_jid(self) -> str | None:
+        """Retorna o remoteJid bruto da mensagem (ex: 5511999998888@s.whatsapp.net)."""
+        jid = self.data.key.remoteJid
+        return jid if jid else None
