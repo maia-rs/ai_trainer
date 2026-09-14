@@ -104,6 +104,91 @@ def _to_aware_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _resumo_progresso_semanal(
+    execucoes: list[Any],
+    treino_do_dia: Any,
+    treino_exercicio_service: TreinoExercicioService,
+) -> dict[str, Any]:
+    """Calcula métricas de progresso semanal focadas no treino do dia."""
+    agora = datetime.now(timezone.utc)
+    inicio_semana = agora - timedelta(days=7)
+    inicio_semana_anterior = inicio_semana - timedelta(days=7)
+    
+    # Execuções desta semana
+    execucoes_semana = [
+        e for e in execucoes 
+        if _to_aware_utc(e.data_execucao) >= inicio_semana
+    ]
+    
+    # Execuções da semana anterior
+    execucoes_semana_anterior = [
+        e for e in execucoes 
+        if inicio_semana_anterior <= _to_aware_utc(e.data_execucao) < inicio_semana
+    ]
+    
+    # Dias únicos de treino
+    dias_semana = {e.data_execucao.date() for e in execucoes_semana}
+    dias_semana_anterior = {e.data_execucao.date() for e in execucoes_semana_anterior}
+    
+    # Volume total (carga * séries * repetições) - usando os nomes corretos do modelo
+    volume_semana = sum(
+        e.carga * getattr(e, 'series_realizadas', getattr(e, 'series', 1)) * 
+        getattr(e, 'repeticoes_realizadas', getattr(e, 'repeticoes', 1)) 
+        for e in execucoes_semana
+    )
+    volume_semana_anterior = sum(
+        e.carga * getattr(e, 'series_realizadas', getattr(e, 'series', 1)) * 
+        getattr(e, 'repeticoes_realizadas', getattr(e, 'repeticoes', 1)) 
+        for e in execucoes_semana_anterior
+    )
+    
+    # Streak de dias consecutivos
+    dias_ordenados = sorted([e.data_execucao.date() for e in execucoes[-30:]], reverse=True)
+    streak_atual = 0
+    data_ref = agora.date()
+    
+    for dia in dias_ordenados:
+        if dia == data_ref or dia == data_ref - timedelta(days=1):
+            streak_atual += 1
+            data_ref = dia - timedelta(days=1)
+        else:
+            break
+    
+    # Progressão percentual
+    progresso_dias = 0
+    progresso_volume = 0
+    
+    if len(dias_semana_anterior) > 0:
+        progresso_dias = ((len(dias_semana) - len(dias_semana_anterior)) / len(dias_semana_anterior)) * 100
+    
+    if volume_semana_anterior > 0:
+        progresso_volume = ((volume_semana - volume_semana_anterior) / volume_semana_anterior) * 100
+    
+    # Exercícios do treino do dia executados esta semana
+    exercicios_treino_executados = 0
+    if treino_do_dia:
+        exercicios_treino = treino_exercicio_service.listar_treinos_exercicios_por_treino(treino_do_dia.id)
+        exercicios_ids = {rel.exercicio_id for rel in exercicios_treino}
+        
+        for ex in execucoes_semana:
+            te = treino_exercicio_service.obter_treino_exercicio_por_id(ex.treino_exercicio_id)
+            if te and te.exercicio_id in exercicios_ids:
+                exercicios_treino_executados += 1
+    
+    return {
+        "dias_treinados_semana": len(dias_semana),
+        "dias_treinados_semana_anterior": len(dias_semana_anterior),
+        "progresso_dias": round(progresso_dias, 1),
+        "volume_semana": volume_semana,
+        "volume_semana_anterior": volume_semana_anterior,
+        "progresso_volume": round(progresso_volume, 1),
+        "streak_dias": streak_atual,
+        "total_execucoes_semana": len(execucoes_semana),
+        "exercicios_treino_dia_executados": exercicios_treino_executados,
+        "meta_semanal": 4,  # Meta padrão de 4 dias por semana
+    }
+
+
 def _resumo_indicadores(
     execucoes: list[Any],
     avaliacoes: list[Any],
@@ -111,7 +196,15 @@ def _resumo_indicadores(
 ) -> dict[str, Any]:
     agora = datetime.now(timezone.utc)
     limite_periodo = agora - timedelta(days=periodo_dias)
-    volume_total = sum(item.carga * item.series * item.repeticoes for item in execucoes)
+    
+    # Calcula volume usando os nomes corretos dos campos do modelo
+    volume_total = sum(
+        item.carga * 
+        getattr(item, 'series_realizadas', getattr(item, 'series', 1)) * 
+        getattr(item, 'repeticoes_realizadas', getattr(item, 'repeticoes', 1)) 
+        for item in execucoes
+    )
+    
     execucoes_periodo = [
         item for item in execucoes if _to_aware_utc(item.data_execucao) >= limite_periodo
     ]
@@ -160,7 +253,9 @@ def _grafico_volume_semanal(execucoes: list[Any]) -> dict:
         data = _to_aware_utc(ex.data_execucao)
         # ISO week: "Sem 01/2026"
         label = f"Sem {data.strftime('%W/%Y')}"
-        semanas[label] += ex.carga * ex.series * ex.repeticoes
+        # Usa os nomes corretos dos campos do modelo
+        volume = ex.carga * getattr(ex, 'series_realizadas', getattr(ex, 'series', 1)) * getattr(ex, 'repeticoes_realizadas', getattr(ex, 'repeticoes', 1))
+        semanas[label] += volume
     labels = sorted(semanas.keys())
     return {
         "labels": labels,
@@ -210,6 +305,95 @@ def _grafico_carga_por_exercicio(
     ]
 
     return {"labels": todas_datas, "datasets": datasets}
+
+
+def _grafico_carga_treino_do_dia(
+    execucoes: list[Any],
+    treino_do_dia: Any,
+    treino_exercicio_service: TreinoExercicioService,
+    exercicio_service: ExercicioService,
+) -> dict:
+    """Retorna evolução de carga específica dos exercícios do treino do dia (últimos 60 dias)."""
+    if not treino_do_dia:
+        return {"labels": [], "datasets": []}
+    
+    # Obtém exercícios do treino do dia
+    exercicios_treino_dia = treino_exercicio_service.listar_treinos_exercicios_por_treino(treino_do_dia.id)
+    if not exercicios_treino_dia:
+        return {"labels": [], "datasets": []}
+    
+    exercicios_ids = {rel.exercicio_id for rel in exercicios_treino_dia}
+    
+    # Filtra execuções dos últimos 60 dias
+    corte = datetime.now(timezone.utc) - timedelta(days=60)
+    execucoes_filtradas = []
+    
+    for ex in execucoes:
+        if _to_aware_utc(ex.data_execucao) < corte:
+            continue
+        te = treino_exercicio_service.obter_treino_exercicio_por_id(ex.treino_exercicio_id)
+        if te and te.exercicio_id in exercicios_ids:
+            execucoes_filtradas.append((ex, te))
+    
+    if not execucoes_filtradas:
+        return {"labels": [], "datasets": []}
+    
+    # Agrupa por exercício e data
+    por_exercicio: dict[str, dict[str, float]] = defaultdict(dict)
+    nomes: dict[str, str] = {}
+    
+    for ex, te in sorted(execucoes_filtradas, key=lambda x: x[0].data_execucao):
+        eid = te.exercicio_id
+        data_str = _to_aware_utc(ex.data_execucao).strftime("%d/%m")
+        # Pega a carga máxima do dia para o exercício
+        por_exercicio[eid][data_str] = max(por_exercicio[eid].get(data_str, 0), ex.carga)
+        
+        if eid not in nomes:
+            try:
+                exercicio = exercicio_service.obter_exercicio_por_id(eid)
+                nomes[eid] = exercicio.nome[:25] + "..." if len(exercicio.nome) > 25 else exercicio.nome
+            except ValueError:
+                nomes[eid] = f"Exercício {eid[:8]}"
+    
+    # Ordena por quantidade de registros (exercícios mais executados primeiro)
+    exercicios_ordenados = sorted(por_exercicio.items(), key=lambda x: len(x[1]), reverse=True)
+    
+    # Eixo X unificado com todas as datas
+    todas_datas: list[str] = sorted({d for _, datas in exercicios_ordenados for d in datas})
+    
+    # Paleta de cores específica para o treino do dia
+    cores_treino = [
+        "#4f6ef7",  # Azul principal
+        "#7c3aed",  # Roxo
+        "#34d399",  # Verde
+        "#fbbf24",  # Amarelo
+        "#f87171",  # Vermelho
+        "#38bdf8",  # Azul claro
+        "#fb923c",  # Laranja
+        "#e879f9",  # Rosa
+    ]
+    
+    datasets = []
+    for i, (eid, datas) in enumerate(exercicios_ordenados):
+        cor = cores_treino[i % len(cores_treino)]
+        datasets.append({
+            "label": nomes.get(eid, eid),
+            "data": [datas.get(d) for d in todas_datas],
+            "borderColor": cor,
+            "backgroundColor": f"{cor}20",  # Transparência
+            "tension": 0.4,
+            "pointRadius": 4,
+            "pointHoverRadius": 6,
+            "borderWidth": 3,
+            "fill": False,
+        })
+    
+    return {
+        "labels": todas_datas,
+        "datasets": datasets,
+        "treino_nome": treino_do_dia.nome if treino_do_dia else "Treino do Dia",
+        "total_exercicios": len(datasets)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -273,14 +457,18 @@ def visualizar_dashboard(
             "usuario_nome": usuario.name if usuario else "",
             "token": token,
             "indicadores": indicadores,
+            "progresso_semanal": _resumo_progresso_semanal(execucoes, treino_dia, treino_exercicio_service),
             "treino_dia": treino_dia.model_dump(mode="json") if treino_dia else None,
             "exercicios_dia": exercicios_dia,
             "treinos": [t.model_dump(mode="json") for t in treinos_ativos],
             "grafico_peso": _grafico_peso(avaliacoes),
             "grafico_composicao": _grafico_composicao(avaliacoes),
             "grafico_volume": _grafico_volume_semanal(execucoes),
-            "grafico_carga": _grafico_carga_por_exercicio(
+            "grafico_carga_geral": _grafico_carga_por_exercicio(
                 execucoes, treino_exercicio_service, exercicio_service
+            ),
+            "grafico_carga_treino_dia": _grafico_carga_treino_do_dia(
+                execucoes, treino_dia, treino_exercicio_service, exercicio_service
             ),
         },
     )
@@ -522,7 +710,12 @@ def obter_evolucao_dashboard(
     return {
         "resumo": {
             "total_execucoes": len(execucoes),
-            "volume_total": sum(item.carga * item.series * item.repeticoes for item in execucoes),
+            "volume_total": sum(
+                item.carga * 
+                getattr(item, 'series_realizadas', getattr(item, 'series', 1)) * 
+                getattr(item, 'repeticoes_realizadas', getattr(item, 'repeticoes', 1)) 
+                for item in execucoes
+            ),
             "periodo": {
                 "inicio": data_inicio,
                 "fim": data_fim,

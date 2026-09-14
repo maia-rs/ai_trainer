@@ -62,6 +62,82 @@
 
 </div>
 
+{# ── Painel de Progresso Semanal ──────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-graph-up-arrow"></i> Progresso Semanal</div>
+      
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="progress-metric">
+            <div class="metric-icon streak"><i class="bi bi-fire"></i></div>
+            <div class="metric-content">
+              <div class="metric-value">{{ progresso_semanal.streak_dias }}</div>
+              <div class="metric-label">Streak atual</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-6 col-md-3">
+          <div class="progress-metric">
+            <div class="metric-icon frequency"><i class="bi bi-calendar-week"></i></div>
+            <div class="metric-content">
+              <div class="metric-value">
+                {{ progresso_semanal.dias_treinados_semana }}/{{ progresso_semanal.meta_semanal }}
+              </div>
+              <div class="metric-label">Meta semanal</div>
+              {% if progresso_semanal.progresso_dias != 0 %}
+                <div class="metric-change {% if progresso_semanal.progresso_dias > 0 %}positive{% else %}negative{% endif %}">
+                  <i class="bi bi-arrow-{% if progresso_semanal.progresso_dias > 0 %}up{% else %}down{% endif %}"></i>
+                  {{ progresso_semanal.progresso_dias|abs }}%
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-6 col-md-3">
+          <div class="progress-metric">
+            <div class="metric-icon volume"><i class="bi bi-speedometer"></i></div>
+            <div class="metric-content">
+              <div class="metric-value">{{ "%.0f"|format(progresso_semanal.volume_semana) }}</div>
+              <div class="metric-label">Volume semanal</div>
+              {% if progresso_semanal.progresso_volume != 0 %}
+                <div class="metric-change {% if progresso_semanal.progresso_volume > 0 %}positive{% else %}negative{% endif %}">
+                  <i class="bi bi-arrow-{% if progresso_semanal.progresso_volume > 0 %}up{% else %}down{% endif %}"></i>
+                  {{ progresso_semanal.progresso_volume|abs }}%
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-6 col-md-3">
+          <div class="progress-metric">
+            <div class="metric-icon target"><i class="bi bi-bullseye"></i></div>
+            <div class="metric-content">
+              <div class="metric-value">{{ progresso_semanal.exercicios_treino_dia_executados }}</div>
+              <div class="metric-label">Exercícios do treino</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {# Progress Bar da Meta Semanal #}
+      <div class="weekly-progress-bar">
+        {% set percentage = (progresso_semanal.dias_treinados_semana / progresso_semanal.meta_semanal * 100) %}
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" style="width: {{ [percentage, 100]|min }}%"></div>
+        </div>
+        <div class="progress-bar-label">
+          {{ progresso_semanal.dias_treinados_semana }} de {{ progresso_semanal.meta_semanal }} dias ({{ "%.0f"|format(percentage) }}%)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# ── Treino do dia ─────────────────────────────────────────────────────── #}
 <div class="row g-3 mb-4">
   <div class="col-12">
@@ -153,16 +229,41 @@
 
   <div class="col-12 col-md-6">
     <div class="ai-card">
-      <div class="section-title"><i class="bi bi-arrow-up-right-circle"></i> Evolução de carga</div>
-      {% if grafico_carga.datasets %}
-        <div class="chart-wrap"><canvas id="chartCarga"></canvas></div>
+      <div class="section-title">
+        <i class="bi bi-arrow-up-right-circle"></i> 
+        Evolução - {{ grafico_carga_treino_dia.treino_nome or "Treino do Dia" }}
+      </div>
+      {% if grafico_carga_treino_dia.datasets %}
+        <div class="treino-info">
+          <span class="badge-info">
+            <i class="bi bi-target"></i>
+            {{ grafico_carga_treino_dia.total_exercicios }} exercício{{ 's' if grafico_carga_treino_dia.total_exercicios != 1 }}
+          </span>
+          <span class="badge-info">
+            <i class="bi bi-calendar-range"></i>
+            Últimos 60 dias
+          </span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartCargaTreinoDia"></canvas></div>
       {% else %}
-        <p class="empty"><i class="bi bi-info-circle me-1"></i>Sem execuções registradas.</p>
+        <p class="empty"><i class="bi bi-info-circle me-1"></i>Nenhum exercício executado do treino de hoje.</p>
       {% endif %}
     </div>
   </div>
 
 </div>
+
+{# ── Evolução Geral (opcional - pode ser movido para baixo) ─────────── #}
+{% if grafico_carga_geral.datasets %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="ai-card">
+      <div class="section-title"><i class="bi bi-graph-up"></i> Evolução Geral de Carga</div>
+      <div class="chart-wrap" style="height: 280px;"><canvas id="chartCargaGeral"></canvas></div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {# ── Treinos ativos ────────────────────────────────────────────────────── #}
 {% if treinos %}
@@ -192,14 +293,15 @@
   const PESO   = {{ grafico_peso       | tojson }};
   const COMP   = {{ grafico_composicao | tojson }};
   const VOLUME = {{ grafico_volume     | tojson }};
-  const CARGA  = {{ grafico_carga      | tojson }};
+  const CARGA_GERAL = {{ grafico_carga_geral | tojson }};
+  const CARGA_TREINO_DIA = {{ grafico_carga_treino_dia | tojson }};
 
   Chart.defaults.color = '#6b7280';
   Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
   Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
   Chart.defaults.font.size = 11;
 
-  const PALETTE = ['#4f6ef7','#a78bfa','#34d399','#fbbf24','#f87171','#38bdf8','#fb923c','#e879f9'];
+  const PALETTE = ['#4f6ef7','#7c3aed','#34d399','#fbbf24','#f87171','#38bdf8','#fb923c','#e879f9'];
 
   function baseScales() {
     return {
@@ -271,13 +373,75 @@
     });
   }
 
-  /* ── Carga por exercício ── */
-  if (CARGA.datasets && CARGA.datasets.length) {
-    new Chart(document.getElementById('chartCarga'), {
+  /* ── Carga do Treino do Dia ── */
+  if (CARGA_TREINO_DIA.datasets && CARGA_TREINO_DIA.datasets.length) {
+    new Chart(document.getElementById('chartCargaTreinoDia'), {
       type: 'line',
       data: {
-        labels: CARGA.labels,
-        datasets: CARGA.datasets.map((ds, i) => ({
+        labels: CARGA_TREINO_DIA.labels,
+        datasets: CARGA_TREINO_DIA.datasets.map((ds, i) => ({
+          label: ds.label,
+          data: ds.data,
+          borderColor: ds.borderColor || PALETTE[i % PALETTE.length],
+          backgroundColor: ds.backgroundColor || 'transparent',
+          tension: ds.tension || .35,
+          pointRadius: ds.pointRadius || 4,
+          pointHoverRadius: ds.pointHoverRadius || 6,
+          borderWidth: ds.borderWidth || 3,
+          fill: ds.fill || false,
+          spanGaps: true,
+        }))
+      },
+      options: { 
+        responsive: true, 
+        maintainAspectRatio: false,
+        plugins: { 
+          legend: { 
+            position: 'bottom', 
+            labels: { 
+              boxWidth: 8, 
+              padding: 10,
+              usePointStyle: true,
+              font: { size: 10 }
+            } 
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            backgroundColor: 'rgba(13,15,20,.9)',
+            titleColor: '#e8eaf0',
+            bodyColor: '#e8eaf0',
+            borderColor: 'rgba(255,255,255,.1)',
+            borderWidth: 1,
+          }
+        },
+        interaction: {
+          mode: 'nearest',
+          axis: 'x',
+          intersect: false
+        },
+        scales: {
+          x: { 
+            grid: { color: 'rgba(255,255,255,.04)' }, 
+            ticks: { maxTicksLimit: 8, color: '#6b7280' }
+          },
+          y: { 
+            grid: { color: 'rgba(255,255,255,.04)' }, 
+            ticks: { maxTicksLimit: 6, color: '#6b7280' },
+            title: { display: true, text: 'Carga (kg)', color: '#6b7280' }
+          }
+        }
+      }
+    });
+  }
+
+  /* ── Carga Geral (se existir) ── */
+  if (CARGA_GERAL.datasets && CARGA_GERAL.datasets.length) {
+    new Chart(document.getElementById('chartCargaGeral'), {
+      type: 'line',
+      data: {
+        labels: CARGA_GERAL.labels,
+        datasets: CARGA_GERAL.datasets.map((ds, i) => ({
           label: ds.label,
           data: ds.data,
           borderColor: PALETTE[i % PALETTE.length],
