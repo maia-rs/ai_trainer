@@ -30,6 +30,7 @@ class UsuarioUpdate(BaseModel):
     name: str | None = Field(None, max_length=100, description="Nome do usuário")
     telefone: str | None = Field(None, max_length=15, description="Telefone do usuário no formato (XX) XXXXX-XXXX")
     status: str | None = Field(None, max_length=10, description="Status do usuário (ativo ou inativo)")
+    meta_semanal_dias: int | None = Field(None, ge=1, le=7, description="Meta de dias de treino por semana (1-7)")
 
     @field_validator("telefone", mode="before")
     @classmethod
@@ -45,6 +46,7 @@ class UsuarioResponse(AppResponseSchema):
     name: str = Field(..., max_length=100, description="Nome do usuário")
     telefone: str = Field(..., max_length=15, description="Telefone do usuário no formato (XX) XXXXX-XXXX")
     status: str = Field(..., max_length=10, description="Status do usuário (ativo ou inativo)")
+    meta_semanal_dias: int = Field(4, description="Meta de dias de treino por semana")
     created_at: datetime = Field(..., description="Data de criação do usuário")
     updated_at: datetime = Field(..., description="Data da última atualização do usuário")
 

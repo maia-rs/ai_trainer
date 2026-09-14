@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from datetime import datetime, timezone
@@ -21,6 +21,7 @@ class Usuario(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     telefone: Mapped[TelefoneValue] = mapped_column(Telefone, nullable=False) # Mapped para TelefoneValue
     status: Mapped[StatusUsuario] = mapped_column(String(10), nullable=False, default=StatusUsuario.ATIVO.value)
+    meta_semanal_dias: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)) # Timezone-aware
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)) # Timezone-aware
 

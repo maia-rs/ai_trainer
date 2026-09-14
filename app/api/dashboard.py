@@ -108,73 +108,94 @@ def _resumo_progresso_semanal(
     execucoes: list[Any],
     treino_do_dia: Any,
     treino_exercicio_service: TreinoExercicioService,
+    meta_semanal: int = 4,
 ) -> dict[str, Any]:
     """Calcula métricas de progresso semanal focadas no treino do dia."""
-    agora = datetime.now(timezone.utc)
-    inicio_semana = agora - timedelta(days=7)
-    inicio_semana_anterior = inicio_semana - timedelta(days=7)
-    
-    # Execuções desta semana
+    agora = datetime.now(_BRT)
+    agora_utc = agora.astimezone(timezone.utc)
+
+    # Início da semana corrente (segunda-feira 00:00 BRT)
+    inicio_semana_brt = (agora - timedelta(days=agora.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    inicio_semana_utc = inicio_semana_brt.astimezone(timezone.utc)
+
+    # Semana anterior
+    inicio_semana_anterior_utc = inicio_semana_utc - timedelta(days=7)
+
+    # Execuções desta semana (seg–hoje)
     execucoes_semana = [
-        e for e in execucoes 
-        if _to_aware_utc(e.data_execucao) >= inicio_semana
+        e for e in execucoes
+        if _to_aware_utc(e.data_execucao) >= inicio_semana_utc
     ]
-    
-    # Execuções da semana anterior
+
+    # Execuções da semana anterior (seg–dom passados)
     execucoes_semana_anterior = [
-        e for e in execucoes 
-        if inicio_semana_anterior <= _to_aware_utc(e.data_execucao) < inicio_semana
+        e for e in execucoes
+        if inicio_semana_anterior_utc <= _to_aware_utc(e.data_execucao) < inicio_semana_utc
     ]
-    
-    # Dias únicos de treino
-    dias_semana = {e.data_execucao.date() for e in execucoes_semana}
-    dias_semana_anterior = {e.data_execucao.date() for e in execucoes_semana_anterior}
-    
-    # Volume total (carga * séries * repetições) - usando os nomes corretos do modelo
-    volume_semana = sum(
-        e.carga * getattr(e, 'series_realizadas', getattr(e, 'series', 1)) * 
-        getattr(e, 'repeticoes_realizadas', getattr(e, 'repeticoes', 1)) 
-        for e in execucoes_semana
+
+    # Dias únicos de treino (em BRT para não cruzar meia-noite errado)
+    def _data_brt(e: Any) -> Any:
+        return _to_aware_utc(e.data_execucao).astimezone(_BRT).date()
+
+    dias_semana = {_data_brt(e) for e in execucoes_semana}
+    dias_semana_anterior = {_data_brt(e) for e in execucoes_semana_anterior}
+
+    # Volume total (carga * séries * repetições)
+    def _volume(exs: list[Any]) -> float:
+        return sum(
+            e.carga
+            * getattr(e, "series_realizadas", getattr(e, "series", 1))
+            * getattr(e, "repeticoes_realizadas", getattr(e, "repeticoes", 1))
+            for e in exs
+        )
+
+    volume_semana = _volume(execucoes_semana)
+    volume_semana_anterior = _volume(execucoes_semana_anterior)
+
+    # Streak de dias consecutivos (em BRT)
+    dias_com_treino = sorted(
+        {_data_brt(e) for e in execucoes},
+        reverse=True,
     )
-    volume_semana_anterior = sum(
-        e.carga * getattr(e, 'series_realizadas', getattr(e, 'series', 1)) * 
-        getattr(e, 'repeticoes_realizadas', getattr(e, 'repeticoes', 1)) 
-        for e in execucoes_semana_anterior
-    )
-    
-    # Streak de dias consecutivos
-    dias_ordenados = sorted([e.data_execucao.date() for e in execucoes[-30:]], reverse=True)
     streak_atual = 0
     data_ref = agora.date()
-    
-    for dia in dias_ordenados:
-        if dia == data_ref or dia == data_ref - timedelta(days=1):
-            streak_atual += 1
-            data_ref = dia - timedelta(days=1)
+    for dia in dias_com_treino:
+        if dia >= data_ref - timedelta(days=1):
+            if dia <= data_ref:
+                streak_atual += 1
+                data_ref = dia - timedelta(days=1)
         else:
             break
-    
+
     # Progressão percentual
-    progresso_dias = 0
-    progresso_volume = 0
-    
-    if len(dias_semana_anterior) > 0:
-        progresso_dias = ((len(dias_semana) - len(dias_semana_anterior)) / len(dias_semana_anterior)) * 100
-    
+    progresso_dias = 0.0
+    progresso_volume = 0.0
+
+    if dias_semana_anterior:
+        progresso_dias = (
+            (len(dias_semana) - len(dias_semana_anterior)) / len(dias_semana_anterior)
+        ) * 100
+
     if volume_semana_anterior > 0:
-        progresso_volume = ((volume_semana - volume_semana_anterior) / volume_semana_anterior) * 100
-    
-    # Exercícios do treino do dia executados esta semana
+        progresso_volume = (
+            (volume_semana - volume_semana_anterior) / volume_semana_anterior
+        ) * 100
+
+    # Exercícios únicos do treino do dia executados esta semana
     exercicios_treino_executados = 0
     if treino_do_dia:
         exercicios_treino = treino_exercicio_service.listar_treinos_exercicios_por_treino(treino_do_dia.id)
-        exercicios_ids = {rel.exercicio_id for rel in exercicios_treino}
-        
-        for ex in execucoes_semana:
-            te = treino_exercicio_service.obter_treino_exercicio_por_id(ex.treino_exercicio_id)
-            if te and te.exercicio_id in exercicios_ids:
-                exercicios_treino_executados += 1
-    
+        treino_exercicio_ids = {rel.id for rel in exercicios_treino}
+        # Conta exercícios únicos (não repetições), só os de hoje
+        exercicios_executados_ids = {
+            e.treino_exercicio_id
+            for e in execucoes_semana
+            if e.treino_exercicio_id in treino_exercicio_ids
+        }
+        exercicios_treino_executados = len(exercicios_executados_ids)
+
     return {
         "dias_treinados_semana": len(dias_semana),
         "dias_treinados_semana_anterior": len(dias_semana_anterior),
@@ -185,7 +206,7 @@ def _resumo_progresso_semanal(
         "streak_dias": streak_atual,
         "total_execucoes_semana": len(execucoes_semana),
         "exercicios_treino_dia_executados": exercicios_treino_executados,
-        "meta_semanal": 4,  # Meta padrão de 4 dias por semana
+        "meta_semanal": meta_semanal,
     }
 
 
@@ -450,6 +471,8 @@ def visualizar_dashboard(
             except ValueError:
                 continue
 
+    meta_semanal = getattr(usuario, "meta_semanal_dias", 4) or 4
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -457,7 +480,7 @@ def visualizar_dashboard(
             "usuario_nome": usuario.name if usuario else "",
             "token": token,
             "indicadores": indicadores,
-            "progresso_semanal": _resumo_progresso_semanal(execucoes, treino_dia, treino_exercicio_service),
+            "progresso_semanal": _resumo_progresso_semanal(execucoes, treino_dia, treino_exercicio_service, meta_semanal),
             "treino_dia": treino_dia.model_dump(mode="json") if treino_dia else None,
             "exercicios_dia": exercicios_dia,
             "treinos": [t.model_dump(mode="json") for t in treinos_ativos],
