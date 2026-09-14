@@ -24,6 +24,7 @@ from app.tools.treino_exercicio.atualizar_exercicio_treino import atualizar_exer
 from app.tools.treino_exercicio.buscar_exercicio_no_treino import buscar_exercicio_no_treino
 from app.tools.treino_exercicio.obter_exercicios_treino import obter_exercicios_treino
 from app.tools.treino_exercicio.remover_exercicio_treino import remover_exercicio_treino
+from app.tools.usuario.atualizar_usuario import atualizar_usuario
 from app.tools.usuario.consultar_usuario import consultar_usuario
 from app.tools.usuario.usuario_criar import criar_usuario
 
@@ -33,6 +34,7 @@ def get_agent_tools() -> list:
     return [
         consultar_usuario,
         criar_usuario,
+        atualizar_usuario,
         criar_treino,
         atualizar_treino,
         desativar_treino,

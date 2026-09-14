@@ -1,6 +1,8 @@
 import os
 import re
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -20,9 +22,33 @@ from app.tools.registry import get_agent_tools
 # Detecta URL de GIF — captura mesmo dentro de markdown [texto](url)
 _GIF_URL_PATTERN = re.compile(r"https?://[^\s\)\]]+\.gif", re.IGNORECASE)
 
+_BRT = ZoneInfo("America/Sao_Paulo")
+
+_DIAS_SEMANA_PT = [
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
+]
+
+
+def _contexto_datetime_brt() -> str:
+    agora = datetime.now(_BRT)
+    dia_semana = _DIAS_SEMANA_PT[agora.weekday()]
+    return agora.strftime(f"%d/%m/%Y %H:%M — {dia_semana}")
+
+
 _SYSTEM_PROMPT = """Você é o AITrainer, assistente pessoal de treino no WhatsApp.
 
 Responda sempre em português do Brasil. Seja objetivo e prático.
+
+━━ DATA E HORA ━━
+- Cada mensagem chega com o contexto [data e hora atual em São Paulo: ...].
+- Use SEMPRE esse valor para saber o dia da semana, data e hora — nunca assuma ou invente.
+- Ao buscar o treino do dia, use o dia da semana desse contexto.
 
 ━━ IDENTIFICAÇÃO DO USUÁRIO ━━
 - O número de telefone do usuário é o thread_id da conversa (ex: 35999326493).
@@ -176,9 +202,12 @@ class AgenteService:
 
         agente = _get_agente()
 
-        # Injeta o número no início para o agente usar diretamente nas tools
+        # Injeta número e data/hora BRT no início para o agente usar diretamente nas tools
+        agora_brt = _contexto_datetime_brt()
         mensagem_com_contexto = (
-            f"[meu número de whatsapp é {thread_id}] {mensagem}"
+            f"[meu número de whatsapp é {thread_id}] "
+            f"[data e hora atual em São Paulo: {agora_brt}] "
+            f"{mensagem}"
         )
 
         resultado = agente.invoke(

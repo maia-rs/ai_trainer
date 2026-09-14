@@ -27,7 +27,7 @@ def criar_usuario(
             usuario = usuario_service.criar_usuario(usuario_create)
             # Utiliza o UsuarioResponse para garantir consistência e mapeamento correto
             return UsuarioResponse.model_validate(usuario).model_dump(
-                include={"id", "name", "telefone", "status"}
+                include={"id", "name", "telefone", "status","meta_semanal_dias"}
             )
         except ValueError as e:
             return {"error": str(e)}

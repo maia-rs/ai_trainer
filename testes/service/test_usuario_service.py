@@ -57,3 +57,23 @@ def test_atualizar_usuario(db_session):
     assert usuario_atualizado.id == usuario_criado.id
     assert usuario_atualizado.name == "Eduardo Silva"
     assert str(usuario_atualizado.telefone) == "(11) 99999-5555"
+
+
+def test_atualizar_meta_semanal_dias(db_session):
+    service = UsuarioService(db_session)
+
+    usuario = service.criar_usuario(UsuarioCreate(name="Fernanda", telefone="11999994444"))
+    assert usuario.meta_semanal_dias == 4  # default
+
+    atualizado = service.atualizar_usuario(usuario.id, UsuarioUpdate(meta_semanal_dias=6))
+    assert atualizado.meta_semanal_dias == 6
+
+
+def test_meta_semanal_dias_nao_muda_ao_atualizar_outro_campo(db_session):
+    service = UsuarioService(db_session)
+
+    usuario = service.criar_usuario(UsuarioCreate(name="Gabriel", telefone="11999993333"))
+    service.atualizar_usuario(usuario.id, UsuarioUpdate(meta_semanal_dias=5))
+
+    atualizado = service.atualizar_usuario(usuario.id, UsuarioUpdate(name="Gabriel Silva"))
+    assert atualizado.meta_semanal_dias == 5  # não voltou para o default

@@ -20,7 +20,7 @@ def consultar_usuario(
                 return {"message": "Usuário não encontrado. Deseja criar um novo usuário?"}
 
             return UsuarioResponse.model_validate(usuario).model_dump(
-                include={"id", "name", "telefone", "status"}
+                include={"id", "name", "telefone", "status", "meta_semanal_dias"}
             )
         except ValueError as e:
             return {"error": str(e)}
