@@ -29,10 +29,18 @@ def listar_treinos_usuario(usuario_id: str) -> dict:
         resultado = []
         for treino in ativos:
             relacoes = te_service.listar_treinos_exercicios_por_treino(treino.id)
+            exercicios_por_id = {
+                ex.id: ex for ex in te_service.obter_exercicios_por_treino(treino.id)
+            }
             exercicios = [
                 {
                     "treino_exercicio_id": rel.id,
                     "exercicio_id": rel.exercicio_id,
+                    "nome_exercicio": (
+                        exercicios_por_id[rel.exercicio_id].nome
+                        if rel.exercicio_id in exercicios_por_id
+                        else None
+                    ),
                     "series": rel.series,
                     "repeticoes": rel.repeticoes,
                     "descanso": rel.descanso,

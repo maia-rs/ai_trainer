@@ -1,6 +1,7 @@
 from app.tools.treino import atualizar_treino as atualizar_treino_module
 from app.tools.treino import criar_treino as criar_treino_module
 from app.tools.treino import desativar_treino as desativar_treino_module
+from app.tools.treino import listar_treinos_usuario as listar_treinos_usuario_module
 from app.tools.treino import obter_treino_do_dia as obter_treino_do_dia_module
 
 
@@ -72,6 +73,94 @@ def test_desativar_treino_retorna_erro(monkeypatch):
 
     resultado = desativar_treino_module.desativar_treino.invoke({"treino_id": "t1"})
     assert resultado == {"error": "falha"}
+
+
+def test_listar_treinos_usuario_retorna_nome_exercicio(monkeypatch):
+    class TreinoService:
+        def __init__(self, session):
+            pass
+
+        def listar_treinos_por_usuario(self, usuario_id):
+            return [
+                DummyObj(
+                    id="t1",
+                    usuario_id=usuario_id,
+                    nome="Treino A",
+                    descricao="Desc",
+                    dia_da_semana="Segunda-feira",
+                    status="ativo",
+                ),
+                DummyObj(
+                    id="t2",
+                    usuario_id=usuario_id,
+                    nome="Treino B",
+                    descricao="Desc",
+                    dia_da_semana="Terca-feira",
+                    status="inativo",
+                ),
+            ]
+
+    class TreinoExService:
+        def __init__(self, session):
+            pass
+
+        def listar_treinos_exercicios_por_treino(self, treino_id):
+            return [
+                DummyObj(
+                    id="te1",
+                    exercicio_id="e1",
+                    series=3,
+                    repeticoes=10,
+                    descanso=60,
+                    observacoes=None,
+                )
+            ]
+
+        def obter_exercicios_por_treino(self, treino_id):
+            return [DummyObj(id="e1", nome="Supino")]
+
+    monkeypatch.setattr(listar_treinos_usuario_module, "SessionLocal", lambda: DummySession())
+    monkeypatch.setattr(listar_treinos_usuario_module, "TreinoService", TreinoService)
+    monkeypatch.setattr(
+        listar_treinos_usuario_module,
+        "TreinoExercicioService",
+        TreinoExService,
+    )
+
+    resultado = listar_treinos_usuario_module.listar_treinos_usuario.invoke(
+        {"usuario_id": "u1"}
+    )
+
+    assert resultado["count"] == 1
+    assert resultado["treinos"][0]["id"] == "t1"
+    assert resultado["treinos"][0]["exercicios"][0]["nome_exercicio"] == "Supino"
+
+
+def test_listar_treinos_usuario_sem_treinos_ativos(monkeypatch):
+    class TreinoService:
+        def __init__(self, session):
+            pass
+
+        def listar_treinos_por_usuario(self, usuario_id):
+            return []
+
+    class TreinoExService:
+        def __init__(self, session):
+            pass
+
+    monkeypatch.setattr(listar_treinos_usuario_module, "SessionLocal", lambda: DummySession())
+    monkeypatch.setattr(listar_treinos_usuario_module, "TreinoService", TreinoService)
+    monkeypatch.setattr(
+        listar_treinos_usuario_module,
+        "TreinoExercicioService",
+        TreinoExService,
+    )
+
+    resultado = listar_treinos_usuario_module.listar_treinos_usuario.invoke(
+        {"usuario_id": "u1"}
+    )
+
+    assert resultado == {"message": "Nenhum treino ativo encontrado."}
 
 
 def test_obter_treino_do_dia_sucesso(monkeypatch):
