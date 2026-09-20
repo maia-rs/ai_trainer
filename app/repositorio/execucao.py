@@ -81,3 +81,28 @@ class ExecucaoRepositorio:
         """Obtém as execuções mais recentes."""
         stmt = select(Execucao).order_by(Execucao.data_execucao.desc()).limit(limite)
         return self.session.execute(stmt).scalars().all()
+
+    def buscar_execucao_duplicada(
+        self,
+        treino_exercicio_id: str,
+        carga: int,
+        series: int,
+        repeticoes: int,
+        janela_minutos: int,
+    ) -> Execucao | None:
+        """Busca execução idêntica dentro da janela de tempo."""
+        from datetime import datetime, timedelta, timezone
+        corte = datetime.now(timezone.utc) - timedelta(minutes=janela_minutos)
+        stmt = (
+            select(Execucao)
+            .where(
+                Execucao.treino_exercicio_id == treino_exercicio_id,
+                Execucao.carga == carga,
+                Execucao.series_realizadas == series,
+                Execucao.repeticoes_realizadas == repeticoes,
+                Execucao.data_execucao >= corte,
+            )
+            .order_by(Execucao.data_execucao.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()

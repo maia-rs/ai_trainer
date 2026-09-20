@@ -10,6 +10,7 @@ import logging
 import re
 
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 
 from app.core.config import (
     EVOLUTION_API_KEY,
@@ -140,6 +141,31 @@ class WhatsappService:
 
         return blocos
 
+    @retry(
+        retry=retry_if_exception_type(httpx.RequestError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+        reraise=False,
+    )
+    def _executar_get_audio_http(self, url: str, payload: dict) -> tuple[bytes, str]:
+        import base64
+
+        resp = httpx.post(url, json=payload, headers=self._headers, timeout=30)
+        if resp.status_code not in (200, 201):
+            logger.warning(
+                "getBase64FromMediaMessage retornou %s: %s",
+                resp.status_code, resp.text[:300],
+            )
+            raise ValueError(f"getBase64FromMediaMessage HTTP {resp.status_code}")
+        data = resp.json()
+        b64 = data.get("base64") or data.get("data")
+        if not b64:
+            logger.warning("getBase64FromMediaMessage: campo base64 ausente na resposta")
+            raise ValueError("getBase64FromMediaMessage: campo base64 ausente")
+        audio_bytes = base64.b64decode(b64)
+        mimetype = data.get("mimetype", "audio/ogg")
+        return audio_bytes, mimetype
+
     def get_audio_base64(self, message_id: str, remote_jid: str) -> tuple[bytes, str] | None:
         """
         Baixa o áudio de uma mensagem via Evolution API getBase64FromMediaMessage.
@@ -147,8 +173,6 @@ class WhatsappService:
         Retorna (bytes_do_audio, mimetype) ou None em caso de falha.
         O endpoint descriptografa o arquivo do WhatsApp e devolve o base64.
         """
-        import base64
-
         url = f"{EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/{EVOLUTION_INSTANCE}"
         payload = {
             "message": {
@@ -160,22 +184,8 @@ class WhatsappService:
             "convertToMp4": False,
         }
         try:
-            resp = httpx.post(url, json=payload, headers=self._headers, timeout=30)
-            if resp.status_code not in (200, 201):
-                logger.warning(
-                    "getBase64FromMediaMessage retornou %s: %s",
-                    resp.status_code, resp.text[:300],
-                )
-                return None
-            data = resp.json()
-            b64 = data.get("base64") or data.get("data")
-            if not b64:
-                logger.warning("getBase64FromMediaMessage: campo base64 ausente na resposta")
-                return None
-            audio_bytes = base64.b64decode(b64)
-            mimetype = data.get("mimetype", "audio/ogg")
-            return audio_bytes, mimetype
-        except Exception as exc:
+            return self._executar_get_audio_http(url, payload)
+        except (RetryError, Exception) as exc:
             logger.error("Erro em get_audio_base64 (msg=%s): %s", message_id, exc)
             return None
 
@@ -193,16 +203,22 @@ class WhatsappService:
         logger.info("sendMedia para %s url=%s resultado=%s", numero, url, resultado)
         return resultado
 
+    @retry(
+        retry=retry_if_exception_type(httpx.RequestError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+        reraise=False,
+    )
+    def _executar_post_http(self, url: str, payload: dict, timeout: int = 15) -> bool:
+        resp = httpx.post(url, json=payload, headers=self._headers, timeout=timeout)
+        if resp.status_code not in (200, 201):
+            logger.warning("Evolution API retornou %s para %s: %s", resp.status_code, url, resp.text[:200])
+            return False
+        return True
+
     def _post(self, url: str, payload: dict, timeout: int = 15) -> bool:
         try:
-            resp = httpx.post(url, json=payload, headers=self._headers, timeout=timeout)
-            if resp.status_code not in (200, 201):
-                logger.warning(
-                    "Evolution API retornou %s para %s: %s",
-                    resp.status_code, url, resp.text[:200],
-                )
-                return False
-            return True
-        except httpx.RequestError as exc:
+            return self._executar_post_http(url, payload, timeout)
+        except (RetryError, httpx.RequestError) as exc:
             logger.error("Erro ao chamar Evolution API (%s): %s", url, exc)
             return False

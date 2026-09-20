@@ -18,7 +18,9 @@ __pycache__/
 # IDE-specific files
 .idea/
 .vscode/
-.kiro/
+
+# Kiro — ignora specs (documentos de design internos) mas versiona o restante
+.kiro/specs/
 
 # Database files (if using SQLite for development)
 *.db

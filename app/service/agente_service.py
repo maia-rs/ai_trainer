@@ -1,15 +1,17 @@
 import os
 import re
+import sqlite3
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 
 from app.core.config import (
+    AGENT_CHECKPOINT_DB,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     LANGSMITH_API_KEY,
@@ -142,6 +144,11 @@ def _configurar_langsmith() -> None:
         os.environ["LANGCHAIN_TRACING_V2"] = LANGSMITH_TRACING
 
 
+def _criar_checkpointer():
+    conn = sqlite3.connect(AGENT_CHECKPOINT_DB, check_same_thread=False)
+    return SqliteSaver(conn)
+
+
 def _criar_agente():
     _configurar_langsmith()
 
@@ -154,7 +161,7 @@ def _criar_agente():
     return create_react_agent(
         model=llm,
         tools=get_agent_tools(),
-        checkpointer=MemorySaver(),
+        checkpointer=_criar_checkpointer(),
         prompt=SystemMessage(content=_SYSTEM_PROMPT),
         
     )

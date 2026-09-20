@@ -16,6 +16,10 @@ from app.core.config import (
     EVOLUTION_DEDUP_TTL_SECONDS,
     EVOLUTION_WEBHOOK_TOKEN,
 )
+from sqlalchemy.exc import IntegrityError
+
+from app.core.database import SessionLocal
+from app.models.mensagem_processada import MensagemProcessada
 from app.schemas.whatsapp import WhatsappWebhookPayload
 from app.service.agente_service import AgenteService
 from app.service.transcricao_service import TranscricaoService
@@ -36,18 +40,39 @@ def _ambiente_producao() -> bool:
     return ENVIRONMENT in {"prod", "production"}
 
 
+def _registrar_dedup_db(message_id: str) -> bool | None:
+    """Registra message_id no banco. Retorna True=duplicata, False=novo, None=erro."""
+    session = SessionLocal()
+    try:
+        session.add(MensagemProcessada(message_id=message_id))
+        session.commit()
+        return False
+    except IntegrityError:
+        session.rollback()
+        return True
+    except Exception:
+        session.rollback()
+        return None
+    finally:
+        session.close()
+
+
 def _mensagem_duplicada(message_id: str) -> bool:
     agora = time.monotonic()
     ttl = max(EVOLUTION_DEDUP_TTL_SECONDS, 1)
-
-    # Limpa entradas expiradas
     expiradas = [mid for mid, ts in _mensagens_processadas.items() if agora - ts > ttl]
     for mid in expiradas:
         _mensagens_processadas.pop(mid, None)
 
+    resultado_db = _registrar_dedup_db(message_id)
+    if resultado_db is True:
+        return True
+    if resultado_db is False:
+        _mensagens_processadas[message_id] = agora
+        return False
+    # Fallback: banco indisponível
     if message_id in _mensagens_processadas:
         return True
-
     _mensagens_processadas[message_id] = agora
     return False
 

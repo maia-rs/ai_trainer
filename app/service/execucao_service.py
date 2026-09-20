@@ -10,6 +10,7 @@ from app.models.execucao import Execucao
 from app.service.usuario_service import UsuarioService
 from app.service.treino_exercicio import TreinoExercicioService
 from app.service.treino_service import TreinoService
+from app.core.config import EXECUCAO_DEDUP_JANELA_MINUTOS
 from sqlalchemy.orm import Session
 
 
@@ -95,6 +96,18 @@ class ExecucaoService:
             raise ValueError("A data da execução não pode ser futura.")
 
         """Registra uma nova execução."""
+        # Verificação de idempotência
+        if EXECUCAO_DEDUP_JANELA_MINUTOS > 0:
+            existente = self.execucao_repositorio.buscar_execucao_duplicada(
+                treino_exercicio_id=execucao_create.treino_exercicio_id,
+                carga=execucao_create.carga,
+                series=execucao_create.series,
+                repeticoes=execucao_create.repeticoes,
+                janela_minutos=EXECUCAO_DEDUP_JANELA_MINUTOS,
+            )
+            if existente:
+                return self._to_response(existente)
+
         dados = execucao_create.model_dump()
         dados.pop("usuario_id", None)
         dados["series_realizadas"] = dados.pop("series")
