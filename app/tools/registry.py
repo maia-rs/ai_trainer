@@ -1,3 +1,9 @@
+from app.tools.ciclo.adicionar_sessao_ciclo import adicionar_sessao_ciclo
+from app.tools.ciclo.concluir_sessao import concluir_sessao
+from app.tools.ciclo.criar_ciclo import criar_ciclo as criar_ciclo_treino
+from app.tools.ciclo.listar_ciclos_usuario import listar_ciclos_usuario
+from app.tools.ciclo.obter_progresso_ciclo import obter_progresso_ciclo
+from app.tools.ciclo.obter_proxima_sessao import obter_proxima_sessao
 from app.tools.avaliacao_fisica.atualizar_avaliacao_fisica import atualizar_avaliacao_fisica
 from app.tools.avaliacao_fisica.obter_avaliacao_fisica import obter_avaliacao_fisica
 from app.tools.avaliacao_fisica.obter_historico_avaliacao_fisica import obter_historico_avaliacao_fisica
@@ -61,4 +67,10 @@ def get_agent_tools() -> list:
         comparar_avaliacoes_fisicas,
         buscar_informacoes_exercicio,
         gerar_link_dashboard,
+        criar_ciclo_treino,
+        adicionar_sessao_ciclo,
+        concluir_sessao,
+        listar_ciclos_usuario,
+        obter_progresso_ciclo,
+        obter_proxima_sessao,
     ]

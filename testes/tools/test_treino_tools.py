@@ -164,21 +164,25 @@ def test_listar_treinos_usuario_sem_treinos_ativos(monkeypatch):
 
 
 def test_obter_treino_do_dia_sucesso(monkeypatch):
-    class TreinoService:
-        def __init__(self, session):
-            pass
+    treino_dummy = DummyObj(
+        id="t1",
+        usuario_id="u1",
+        nome="Treino A",
+        descricao="Desc",
+        dia_da_semana="Segunda-feira",
+        status="ativo",
+    )
 
-        def listar_treinos_por_usuario(self, usuario_id):
-            return [
-                DummyObj(
-                    id="t1",
-                    usuario_id=usuario_id,
-                    nome="Treino A",
-                    descricao="Desc",
-                    dia_da_semana="Segunda-feira",
-                    status="ativo",
-                )
-            ]
+    class MockTreinoService:
+        def obter_treino_do_dia_por_usuario(self, usuario_id, data_ref=None):
+            return treino_dummy.model_dump()
+
+    class MockCicloService:
+        def __init__(self, session):
+            self.treino_service = MockTreinoService()
+
+        def obter_treino_do_dia(self, usuario_id):
+            return {"fonte": "dia_semana", "treino": treino_dummy}
 
     class TreinoExService:
         def __init__(self, session):
@@ -200,7 +204,7 @@ def test_obter_treino_do_dia_sucesso(monkeypatch):
             return [DummyObj(id="e1", nome="Supino")]
 
     monkeypatch.setattr(obter_treino_do_dia_module, "SessionLocal", lambda: DummySession())
-    monkeypatch.setattr(obter_treino_do_dia_module, "TreinoService", TreinoService)
+    monkeypatch.setattr(obter_treino_do_dia_module, "CicloService", MockCicloService)
     monkeypatch.setattr(
         obter_treino_do_dia_module,
         "TreinoExercicioService",
@@ -216,19 +220,26 @@ def test_obter_treino_do_dia_sucesso(monkeypatch):
 
 
 def test_obter_treino_do_dia_data_invalida(monkeypatch):
-    class TreinoService:
+    class MockCicloService:
         def __init__(self, session):
             pass
 
-        def listar_treinos_por_usuario(self, usuario_id):
-            return []
+        def obter_treino_do_dia(self, usuario_id):
+            return {"fonte": "dia_semana", "treino": None}
+
+        @property
+        def treino_service(self):
+            class TS:
+                def obter_treino_do_dia_por_usuario(self, usuario_id, data_ref):
+                    raise ValueError("invalid isoformat string")
+            return TS()
 
     class TreinoExService:
         def __init__(self, session):
             pass
 
     monkeypatch.setattr(obter_treino_do_dia_module, "SessionLocal", lambda: DummySession())
-    monkeypatch.setattr(obter_treino_do_dia_module, "TreinoService", TreinoService)
+    monkeypatch.setattr(obter_treino_do_dia_module, "CicloService", MockCicloService)
     monkeypatch.setattr(
         obter_treino_do_dia_module,
         "TreinoExercicioService",

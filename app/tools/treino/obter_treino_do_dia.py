@@ -1,59 +1,44 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from langchain_core.tools import tool
 
 from app.core.database import SessionLocal
+from app.service.ciclo_service import CicloService
 from app.service.treino_exercicio import TreinoExercicioService
-from app.service.treino_service import TreinoService
-
-
-_DIAS_SEMANA = [
-    "Segunda-feira",
-    "Terca-feira",
-    "Quarta-feira",
-    "Quinta-feira",
-    "Sexta-feira",
-    "Sabado",
-    "Domingo",
-]
-
-
-def _normalizar_dia_da_semana(data_referencia: date) -> str:
-    return _DIAS_SEMANA[data_referencia.weekday()]
 
 
 @tool
 def obter_treino_do_dia(usuario_id: str, data_iso: str | None = None) -> dict:
-    """Retorna o treino do dia para um usuario e seus exercicios."""
+    """Retorna o treino do dia para um usuario e seus exercicios.
 
+    Prioriza o ciclo ativo do usuário. Se não houver ciclo, busca pelo dia da semana.
+    O campo 'fonte' indica a origem: 'ciclo' ou 'dia_semana'.
+    """
     session = SessionLocal()
-
     try:
-        treino_service = TreinoService(session)
+        ciclo_service = CicloService(session)
         treino_exercicio_service = TreinoExercicioService(session)
 
         try:
-            if data_iso:
-                data_referencia = datetime.fromisoformat(data_iso).date()
-            else:
-                data_referencia = datetime.now().date()
+            resultado = ciclo_service.obter_treino_do_dia(usuario_id)
 
-            dia_alvo = _normalizar_dia_da_semana(data_referencia)
-            treinos_usuario = treino_service.listar_treinos_por_usuario(usuario_id)
-            treino = next(
-                (
-                    item
-                    for item in treinos_usuario
-                    if item.status == "ativo" and item.dia_da_semana == dia_alvo
-                ),
-                None,
-            )
+            # Se a fonte é dia_semana e data_iso foi fornecido, preserva busca por data específica
+            if resultado["fonte"] == "dia_semana" and data_iso:
+                data_referencia = datetime.fromisoformat(data_iso)
+                treino_dia = ciclo_service.treino_service.obter_treino_do_dia_por_usuario(
+                    usuario_id, data_referencia
+                )
+                resultado = {"fonte": "dia_semana", "treino": treino_dia}
 
+            treino = resultado.get("treino")
             if not treino:
-                return {"message": "Nenhum treino encontrado para o dia informado."}
+                return {"fonte": resultado["fonte"], "message": "Nenhum treino encontrado para hoje."}
 
-            relacoes = treino_exercicio_service.listar_treinos_exercicios_por_treino(treino.id)
-            exercicios = treino_exercicio_service.obter_exercicios_por_treino(treino.id)
+            treino_id = treino.get("id") if isinstance(treino, dict) else treino.id
+
+            # Enriquece com lista de exercícios
+            relacoes = treino_exercicio_service.listar_treinos_exercicios_por_treino(treino_id)
+            exercicios = treino_exercicio_service.obter_exercicios_por_treino(treino_id)
             exercicios_por_id = {ex.id: ex for ex in exercicios}
 
             itens_treino = []
@@ -71,8 +56,9 @@ def obter_treino_do_dia(usuario_id: str, data_iso: str | None = None) -> dict:
                     }
                 )
 
-            return {
-                "treino": {
+            resposta = {
+                "fonte": resultado["fonte"],
+                "treino": treino if isinstance(treino, dict) else {
                     "id": treino.id,
                     "usuario_id": treino.usuario_id,
                     "nome": treino.nome,
@@ -82,6 +68,13 @@ def obter_treino_do_dia(usuario_id: str, data_iso: str | None = None) -> dict:
                 },
                 "exercicios": itens_treino,
             }
+
+            # Inclui ciclo_sessao_id quando a fonte é ciclo
+            if resultado["fonte"] == "ciclo":
+                resposta["ciclo_sessao_id"] = resultado.get("ciclo_sessao_id")
+
+            return resposta
+
         except ValueError as e:
             return {"error": str(e)}
 

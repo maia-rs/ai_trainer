@@ -1,8 +1,21 @@
-from app.schemas.treino import TreinoCreate, TreinoUpdate,TreinoResponse
-from app.repositorio.treino import TreinoRepositorio
-from app.models.treino import Treino, StatusTreino
-from app.service.usuario_service import UsuarioService
+from datetime import datetime
+
 from sqlalchemy.orm import Session
+
+from app.models.treino import Treino, StatusTreino
+from app.repositorio.treino import TreinoRepositorio
+from app.schemas.treino import TreinoCreate, TreinoResponse, TreinoUpdate
+from app.service.usuario_service import UsuarioService
+
+_DIAS_SEMANA = [
+    "Segunda-feira",
+    "Terca-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
+    "Sabado",
+    "Domingo",
+]
 
 
 class TreinoService:
@@ -53,6 +66,20 @@ class TreinoService:
             return None
         treino.status = StatusTreino.INATIVO.value
         return TreinoResponse.model_validate(self.treino_repositorio.atualizar_treino(treino))
+
+    def obter_treino_do_dia_por_usuario(self, usuario_id: str, data_referencia: datetime | None = None) -> dict | None:
+        """Retorna o treino ativo do dia da semana para o usuário, ou None se não houver."""
+        if data_referencia is None:
+            data_referencia = datetime.now()
+        dia_alvo = _DIAS_SEMANA[data_referencia.weekday()]
+        treinos = self.treino_repositorio.obter_treinos_ativos_por_usuario(usuario_id)
+        treino = next(
+            (t for t in treinos if t.dia_da_semana == dia_alvo),
+            None,
+        )
+        if not treino:
+            return None
+        return TreinoResponse.model_validate(treino).model_dump()
 
     def duplicar_treino(self, treino_id: str) -> TreinoResponse | None:
         """Duplica um treino existente."""

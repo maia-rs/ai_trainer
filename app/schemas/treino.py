@@ -8,7 +8,7 @@ class TreinoCreate(BaseModel):
     usuario_id: str = Field(..., description="ID do usuário associado ao treino")
     nome: str = Field(..., max_length=100, description="Nome do treino")
     descricao: str = Field(..., description="Descrição detalhada do treino")
-    dia_da_semana: str = Field(..., max_length=20, description="Dia da semana do treino")
+    dia_da_semana: str | None = Field(None, max_length=20, description="Dia da semana do treino (None para treinos de ciclo)")
 
 class TreinoUpdate(BaseModel):
     """Esquema para atualização de um treino."""
@@ -25,7 +25,7 @@ class TreinoResponse(AppResponseSchema):
     usuario_id: str = Field(..., description="ID do usuário associado ao treino")
     nome: str = Field(..., max_length=100, description="Nome do treino")
     descricao: str = Field(..., description="Descrição detalhada do treino")
-    dia_da_semana: str = Field(..., max_length=20, description="Dia da semana do treino")
+    dia_da_semana: str | None = Field(None, max_length=20, description="Dia da semana do treino")
     status: str = Field(..., max_length=10, description="Status do treino (ativo ou inativo)")
     created_at: datetime = Field(..., description="Data de criação do treino")
     updated_at: datetime = Field(..., description="Data da última atualização do treino")
