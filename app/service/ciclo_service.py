@@ -153,6 +153,16 @@ class CicloService:
             "percentual_conclusao": percentual,
         }
 
+    def desativar_ciclo(self, ciclo_id: str) -> CicloResponse:
+        """Marca um ciclo como pausado, liberando o usuário para criar um novo ciclo ativo."""
+        ciclo = self.ciclo_repo.obter_ciclo_por_id(ciclo_id)
+        if not ciclo:
+            raise ValueError("Ciclo não encontrado.")
+        if ciclo.status == StatusCiclo.CONCLUIDO.value:
+            raise ValueError("Ciclo já está concluído e não pode ser desativado.")
+        ciclo.status = StatusCiclo.PAUSADO.value
+        return CicloResponse.model_validate(self.ciclo_repo.atualizar_ciclo(ciclo))
+
     def criar_ciclo_com_rotacao(
         self,
         usuario_id: str,

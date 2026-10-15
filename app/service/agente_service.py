@@ -141,6 +141,10 @@ Responda sempre em português do Brasil. Seja objetivo e prático.
 - SE "fonte" == "dia_semana":
   - Comportamento padrão — não há ciclo ativo
 
+- Para desativar um ciclo ativo (pausar/encerrar), use desativar_ciclo(ciclo_id)
+  - Use quando o usuario quiser criar um novo ciclo mas já tem um ativo
+  - Fluxo: listar_ciclos_usuario → confirmar com usuario → desativar_ciclo → criar novo
+
 - Para criar um ciclo, use criar_ciclo(usuario_id, nome, data_inicio)
   - data_inicio no formato YYYY-MM-DD
 
