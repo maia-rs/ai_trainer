@@ -153,6 +153,58 @@ class CicloService:
             "percentual_conclusao": percentual,
         }
 
+    def criar_ciclo_com_rotacao(
+        self,
+        usuario_id: str,
+        nome: str,
+        data_inicio: date,
+        treino_ids: list[str],
+        duracao_meses: int,
+    ) -> dict:
+        """Cria um ciclo e popula as sessões automaticamente usando rotação de treinos.
+
+        Usa `usuario.meta_semanal_dias` para calcular o total de sessões.
+        A rotação continua de onde parou entre semanas — ex: ABCD → ABCD → ...
+
+        Returns dict com ciclo criado e total de sessões geradas.
+        """
+        if not treino_ids:
+            raise ValueError("É necessário informar ao menos um treino para a rotação.")
+        if duracao_meses < 1:
+            raise ValueError("Duração deve ser de pelo menos 1 mês.")
+
+        # Valida todos os treinos antes de criar o ciclo
+        for tid in treino_ids:
+            if not self.treino_service.obter_treino_por_id(tid):
+                raise ValueError(f"Treino '{tid}' não encontrado.")
+
+        # Lê meta_semanal_dias do usuário
+        usuario = self.usuario_service.obter_usuario_por_id(usuario_id)
+        if not usuario:
+            raise ValueError("Usuário não encontrado.")
+        if usuario.status != "ativo":
+            raise ValueError("Usuário não está ativo.")
+
+        dias_por_semana = usuario.meta_semanal_dias or 4
+        semanas = duracao_meses * 4
+        total_sessoes = semanas * dias_por_semana
+
+        # Cria o ciclo
+        ciclo = self.criar_ciclo(usuario_id, nome, data_inicio)
+
+        # Popula sessões com rotação contínua
+        n_treinos = len(treino_ids)
+        for i in range(total_sessoes):
+            treino_id = treino_ids[i % n_treinos]
+            self.adicionar_sessao(ciclo.id, i + 1, treino_id)
+
+        return {
+            "ciclo": ciclo.model_dump(),
+            "total_sessoes": total_sessoes,
+            "dias_por_semana": dias_por_semana,
+            "rotacao": [t for t in treino_ids],
+        }
+
     # ── Integração com treino do dia ───────────────────────────────────────
 
     def obter_treino_do_dia(self, usuario_id: str) -> dict:

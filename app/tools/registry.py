@@ -1,6 +1,7 @@
 from app.tools.ciclo.adicionar_sessao_ciclo import adicionar_sessao_ciclo
 from app.tools.ciclo.concluir_sessao import concluir_sessao
 from app.tools.ciclo.criar_ciclo import criar_ciclo as criar_ciclo_treino
+from app.tools.ciclo.criar_ciclo_com_rotacao import criar_ciclo_com_rotacao
 from app.tools.ciclo.listar_ciclos_usuario import listar_ciclos_usuario
 from app.tools.ciclo.obter_progresso_ciclo import obter_progresso_ciclo
 from app.tools.ciclo.obter_proxima_sessao import obter_proxima_sessao
@@ -68,6 +69,7 @@ def get_agent_tools() -> list:
         buscar_informacoes_exercicio,
         gerar_link_dashboard,
         criar_ciclo_treino,
+        criar_ciclo_com_rotacao,
         adicionar_sessao_ciclo,
         concluir_sessao,
         listar_ciclos_usuario,

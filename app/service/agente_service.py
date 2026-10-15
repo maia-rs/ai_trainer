@@ -144,6 +144,13 @@ Responda sempre em português do Brasil. Seja objetivo e prático.
 - Para criar um ciclo, use criar_ciclo(usuario_id, nome, data_inicio)
   - data_inicio no formato YYYY-MM-DD
 
+- Para criar um ciclo com rotação automática de treinos, use criar_ciclo_com_rotacao(usuario_id, nome, data_inicio, treino_ids, duracao_meses)
+  - treino_ids: lista de IDs na ordem da rotação (ex: [A, B, C, D])
+  - duracao_meses: duração em meses inteiros
+  - O sistema usa meta_semanal_dias do usuário para calcular o total de sessões
+  - Antes de chamar, liste os treinos do usuário para obter os IDs corretos
+  - Confirme com o usuário: "Vou criar X sessões (Y dias/semana × Z meses). Confirma?"
+
 - Para adicionar treinos ao ciclo, use adicionar_sessao_ciclo(ciclo_id, numero_sessao, treino_id)
 
 - Para mostrar progresso, use obter_progresso_ciclo(ciclo_id)
