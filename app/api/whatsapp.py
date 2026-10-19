@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import APIRouter, Body, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Header, HTTPException, status
 
 from app.core.config import (
     ENVIRONMENT,
@@ -94,6 +94,7 @@ def _verificar_token(token: str | None) -> None:
 
 @router.post("/webhook")
 async def receber_mensagem(
+    background_tasks: BackgroundTasks,
     payload: object = Body(default=None),
     x_webhook_token: str | None = Header(default=None, alias="x-webhook-token"),
 ) -> dict:
@@ -230,7 +231,7 @@ async def receber_mensagem(
         resposta = "Desculpe, ocorreu um erro interno. Tente novamente em instantes."
 
     try:
-        _whatsapp_service.enviar_resposta(numero_destino, resposta)
+        _whatsapp_service.enviar_resposta(numero_destino, resposta, background_tasks=background_tasks)
     except Exception as exc:
         logger.exception("Erro ao enviar resposta via WhatsApp: %s", exc)
 

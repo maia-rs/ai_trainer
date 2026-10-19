@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
@@ -17,6 +18,9 @@ from app.core.config import (
     EVOLUTION_API_URL,
     EVOLUTION_INSTANCE,
 )
+
+if TYPE_CHECKING:
+    from fastapi import BackgroundTasks
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +50,12 @@ class WhatsappService:
     # API pública
     # ------------------------------------------------------------------
 
-    def enviar_resposta(self, numero: str, texto: str) -> None:
+    def enviar_resposta(self, numero: str, texto: str, background_tasks=None) -> None:
         """
         Envia a resposta do agente ao usuário.
 
-        - Extrai URLs de GIF do texto e envia cada uma como mídia separada.
-        - Envia o texto (sem as URLs de GIF) como mensagem de texto.
-        - Se o texto contiver um link de dashboard, envia como link com preview.
+        - Texto é enviado imediatamente (síncrono).
+        - GIFs são enviados em background para não bloquear o worker.
         """
         texto = _EMPTY_MARKDOWN_LINK_PATTERN.sub("", texto)
         texto = _MARKDOWN_GIF_LINK_PATTERN.sub(r"\1", texto)
@@ -65,23 +68,27 @@ class WhatsappService:
         texto_limpo = "\n".join(linhas).strip()
         somente_gif = bool(gifs) and not texto_limpo
 
-        # Envia o texto principal (em partes quando necessário)
+        # Envia o texto principal imediatamente
         if texto_limpo:
             for parte in self._quebrar_texto(texto_limpo, max_chars=_MAX_TEXT_CHARS):
                 self._enviar_texto(numero, parte)
 
-        # Envia cada GIF como mídia
+        # Envia cada GIF em background para não bloquear o worker
         for url in gifs:
-            enviado = self._enviar_midia(numero, url, caption="")
-            if not enviado:
-                # Fallback: se a API de mídia falhar, envia o link como texto.
-                self._enviar_texto(numero, f"Não consegui enviar o GIF como mídia. Link: {url}")
-                continue
+            if background_tasks is not None:
+                background_tasks.add_task(self._enviar_gif_com_fallback, numero, url, somente_gif)
+            else:
+                # Fallback sem BackgroundTasks (ex: chamadas diretas em testes)
+                self._enviar_gif_com_fallback(numero, url, somente_gif)
 
-            # Alguns clientes não renderizam GIF mesmo com ACK da API.
-            # Quando a resposta era só GIF, manda também o link clicável.
-            if somente_gif:
-                self._enviar_texto(numero, f"Link do GIF: {url}")
+    def _enviar_gif_com_fallback(self, numero: str, url: str, somente_gif: bool) -> None:
+        """Envia GIF como vídeo. Em caso de falha, envia o link como texto."""
+        enviado = self._enviar_midia(numero, url, caption="")
+        if not enviado:
+            self._enviar_texto(numero, f"Não consegui enviar o GIF como mídia. Link: {url}")
+            return
+        if somente_gif:
+            self._enviar_texto(numero, f"Link do GIF: {url}")
 
     # ------------------------------------------------------------------
     # Métodos internos
