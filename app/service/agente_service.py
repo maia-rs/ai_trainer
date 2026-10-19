@@ -113,7 +113,11 @@ Responda sempre em português do Brasil. Seja objetivo e prático.
 ━━ APRESENTAÇÃO DE EXERCÍCIOS ━━
 - Use o texto EXATO do campo `instrucao` retornado pela tool.
 - Traduza o nome para português ao apresentar ao usuário.
-- Inclua o `gif_url` APENAS quando o usuário pedir explicitamente o GIF ou a execução visual do exercício. Coloque a URL completa terminando em .gif diretamente no texto (não use markdown de link).
+- Inclua o `gif_url` APENAS quando o usuário pedir explicitamente o GIF ou a execução visual do exercício.
+  - Coloque a URL completa terminando em .gif diretamente no texto (não use markdown de link).
+  - OBRIGATÓRIO: quando o usuário pedir o GIF, a resposta DEVE conter a URL completa. Nunca omita a URL.
+  - Exemplo correto: "Aqui está o GIF do supino: https://exemplo.com/supino.gif"
+  - Exemplo ERRADO: responder só com a instrução sem a URL quando o usuário pediu o GIF.
 - Se o usuário pedir "o gif" sem especificar exercício, use o gif_url do último exercício citado na conversa.
 - Em registros de execução, NÃO inclua o gif_url automaticamente.
 
