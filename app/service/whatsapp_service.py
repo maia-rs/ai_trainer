@@ -190,17 +190,18 @@ class WhatsappService:
             return None
 
     def _enviar_midia(self, numero: str, url: str, caption: str = "") -> bool:
-        """Envia imagem/GIF via URL."""
+        """Envia GIF como vídeo para garantir reprodução animada no WhatsApp."""
         payload = {
             "number": numero,
-            "mediatype": "image",
-            "mimetype": "image/gif",
+            "mediatype": "video",
+            "mimetype": "video/mp4",
             "caption": caption,
             "media": url,
             "fileName": url.split("/")[-1],
+            "gifPlayback": True,
         }
         resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload, timeout=5)
-        logger.info("sendMedia para %s url=%s resultado=%s", numero, url, resultado)
+        logger.info("sendMedia (video/gif) para %s url=%s resultado=%s", numero, url, resultado)
         return resultado
 
     @retry(
