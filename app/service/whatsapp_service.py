@@ -200,7 +200,7 @@ class WhatsappService:
             "fileName": url.split("/")[-1],
             "gifPlayback": True,
         }
-        resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload, timeout=5)
+        resultado = self._post(f"{self._base}/sendMedia/{EVOLUTION_INSTANCE}", payload, timeout=30)
         logger.info("sendMedia (video/gif) para %s url=%s resultado=%s", numero, url, resultado)
         return resultado
 
