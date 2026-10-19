@@ -82,13 +82,10 @@ class WhatsappService:
                 self._enviar_gif_com_fallback(numero, url, somente_gif)
 
     def _enviar_gif_com_fallback(self, numero: str, url: str, somente_gif: bool) -> None:
-        """Envia GIF como vídeo. Em caso de falha, envia o link como texto."""
-        enviado = self._enviar_midia(numero, url, caption="")
-        if not enviado:
-            self._enviar_texto(numero, f"Não consegui enviar o GIF como mídia. Link: {url}")
-            return
-        if somente_gif:
-            self._enviar_texto(numero, f"Link do GIF: {url}")
+        """Tenta enviar GIF como mídia. Independente do resultado, envia o link clicável no texto."""
+        self._enviar_midia(numero, url, caption="")
+        # Sempre envia o link — garante que o usuário receba mesmo se a mídia falhar
+        self._enviar_texto(numero, f"🎬 {url}")
 
     # ------------------------------------------------------------------
     # Métodos internos
