@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import sqlite3
@@ -22,6 +23,8 @@ from app.core.config import (
 from app.tools.registry import get_agent_tools
 
 # Detecta URL de GIF — captura mesmo dentro de markdown [texto](url)
+logger = logging.getLogger(__name__)
+
 _GIF_URL_PATTERN = re.compile(r"https?://[^\s\)\]]+\.gif", re.IGNORECASE)
 
 _BRT = ZoneInfo("America/Sao_Paulo")
@@ -235,6 +238,20 @@ def _extrair_texto_da_resposta(resultado: dict) -> str:
     return str(conteudo)
 
 
+def _limpar_checkpoint_thread(thread_id: str) -> None:
+    """Remove o histórico corrompido de um thread do SQLite de checkpoints."""
+    import sqlite3 as _sqlite3
+    try:
+        conn = _sqlite3.connect(AGENT_CHECKPOINT_DB, check_same_thread=False)
+        conn.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
+        conn.execute("DELETE FROM checkpoint_writes WHERE thread_id = ?", (thread_id,))
+        conn.commit()
+        conn.close()
+        logger.info("Checkpoint do thread %s removido com sucesso.", thread_id)
+    except Exception as exc:
+        logger.warning("Erro ao limpar checkpoint do thread %s: %s", thread_id, exc)
+
+
 class AgenteService:
     """Serviço de orquestração do agente com Gemini e LangSmith."""
 
@@ -244,7 +261,6 @@ class AgenteService:
 
         agente = _get_agente()
 
-        # Injeta número e data/hora BRT no início para o agente usar diretamente nas tools
         agora_brt = _contexto_datetime_brt()
         mensagem_com_contexto = (
             f"[meu número de whatsapp é {thread_id}] "
@@ -252,10 +268,25 @@ class AgenteService:
             f"{mensagem}"
         )
 
-        resultado = agente.invoke(
-            {"messages": [("human", mensagem_com_contexto)]},
-            config={"configurable": {"thread_id": thread_id}},
-        )
+        try:
+            resultado = agente.invoke(
+                {"messages": [("human", mensagem_com_contexto)]},
+                config={"configurable": {"thread_id": thread_id}},
+            )
+        except ValueError as exc:
+            # Histórico corrompido (tool_call sem ToolMessage) — limpa e tenta de novo
+            if "INVALID_CHAT_HISTORY" in str(exc) or "ToolMessage" in str(exc):
+                logger.warning(
+                    "Histórico corrompido no thread %s — limpando e reiniciando. Erro: %s",
+                    thread_id, exc,
+                )
+                _limpar_checkpoint_thread(thread_id)
+                resultado = agente.invoke(
+                    {"messages": [("human", mensagem_com_contexto)]},
+                    config={"configurable": {"thread_id": thread_id}},
+                )
+            else:
+                raise
 
         resposta = _extrair_texto_da_resposta(resultado)
 
