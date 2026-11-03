@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.ciclo import Ciclo, StatusCiclo
-from app.models.ciclo_sessao import CicloSessao
+from app.models.ciclo_sessao import CicloSessao, StatusCicloSessao
 from app.repositorio.ciclo import CicloRepositorio
 from app.repositorio.ciclo_sessao import CicloSessaoRepositorio
 from app.schemas.ciclo import CicloResponse, CicloSessaoResponse
@@ -54,12 +54,22 @@ class CicloService:
         ciclos = self.ciclo_repo.listar_ciclos_por_usuario(usuario_id)
         return [CicloResponse.model_validate(c) for c in ciclos]
 
+    def desativar_ciclo(self, ciclo_id: str) -> CicloResponse:
+        """Marca um ciclo como pausado, liberando o usuário para criar um novo ciclo ativo."""
+        ciclo = self.ciclo_repo.obter_ciclo_por_id(ciclo_id)
+        if not ciclo:
+            raise ValueError("Ciclo não encontrado.")
+        if ciclo.status == StatusCiclo.CONCLUIDO.value:
+            raise ValueError("Ciclo já está concluído e não pode ser desativado.")
+        ciclo.status = StatusCiclo.PAUSADO.value
+        return CicloResponse.model_validate(self.ciclo_repo.atualizar_ciclo(ciclo))
+
     # ── Sessões ────────────────────────────────────────────────────────────
 
     def adicionar_sessao(
         self, ciclo_id: str, numero_sessao: int, treino_id: str
     ) -> CicloSessaoResponse:
-        """Adiciona uma sessão ao ciclo."""
+        """Adiciona uma sessão ao ciclo com status inicial 'aguardando'."""
         ciclo = self.ciclo_repo.obter_ciclo_por_id(ciclo_id)
         if not ciclo:
             raise ValueError("Ciclo não encontrado.")
@@ -68,41 +78,62 @@ class CicloService:
         if not treino:
             raise ValueError("Treino não encontrado.")
 
-        # Verifica duplicata antes de tentar INSERT para melhor mensagem de erro
         existente = self.sessao_repo.obter_sessao_por_numero(ciclo_id, numero_sessao)
         if existente:
-            raise ValueError(
-                f"Sessão {numero_sessao} já existe no ciclo."
-            )
+            raise ValueError(f"Sessão {numero_sessao} já existe no ciclo.")
 
         sessao = CicloSessao(
             ciclo_id=ciclo_id,
             numero_sessao=numero_sessao,
             treino_id=treino_id,
+            status=StatusCicloSessao.AGUARDANDO.value,
         )
         try:
             return CicloSessaoResponse.model_validate(self.sessao_repo.criar_sessao(sessao))
         except IntegrityError:
             self.session.rollback()
-            raise ValueError(
-                f"Sessão {numero_sessao} já existe no ciclo (violação de unicidade)."
-            )
+            raise ValueError(f"Sessão {numero_sessao} já existe no ciclo (violação de unicidade).")
+
+    def iniciar_sessao(self, ciclo_sessao_id: str) -> CicloSessaoResponse:
+        """Muda status da sessão para 'em_execucao' quando o usuário começa o treino."""
+        sessao = self.sessao_repo.obter_sessao_por_id(ciclo_sessao_id)
+        if not sessao:
+            raise ValueError("Sessão não encontrada.")
+        if sessao.status == StatusCicloSessao.CONCLUIDA.value:
+            raise ValueError("Sessão já foi concluída.")
+        if sessao.status == StatusCicloSessao.EM_EXECUCAO.value:
+            return CicloSessaoResponse.model_validate(sessao)  # idempotente
+
+        sessao.status = StatusCicloSessao.EM_EXECUCAO.value
+        sessao.data_inicio_execucao = datetime.now(timezone.utc)
+        return CicloSessaoResponse.model_validate(self.sessao_repo.atualizar_sessao(sessao))
 
     def obter_proxima_sessao(self, usuario_id: str) -> dict | None:
-        """Retorna a próxima sessão pendente do ciclo ativo do usuário.
+        """Retorna a próxima sessão do ciclo ativo.
 
-        Se todas as sessões estiverem concluídas, marca o ciclo como concluído e retorna None.
+        Prioriza sessão com status='em_execucao' (retomada).
+        Se não houver, busca a próxima 'aguardando' e a inicia automaticamente.
+        Se todas concluídas, fecha o ciclo e retorna None.
         """
         ciclo = self.ciclo_repo.obter_ciclo_ativo_por_usuario(usuario_id)
         if not ciclo:
             return None
 
-        sessao = self.sessao_repo.obter_proxima_sessao(ciclo.id)
+        # Verifica se há sessão em execução (retomada de sessão em aberto)
+        sessao = self.sessao_repo.obter_sessao_em_execucao(ciclo.id)
+
         if not sessao:
-            # Todas as sessões concluídas — fecha o ciclo
-            ciclo.status = StatusCiclo.CONCLUIDO.value
-            self.ciclo_repo.atualizar_ciclo(ciclo)
-            return None
+            # Busca próxima aguardando e a inicia
+            sessao = self.sessao_repo.obter_proxima_sessao(ciclo.id)
+            if not sessao:
+                # Todas concluídas — fecha o ciclo
+                ciclo.status = StatusCiclo.CONCLUIDO.value
+                self.ciclo_repo.atualizar_ciclo(ciclo)
+                return None
+            # Muda para em_execucao
+            sessao.status = StatusCicloSessao.EM_EXECUCAO.value
+            sessao.data_inicio_execucao = datetime.now(timezone.utc)
+            self.sessao_repo.atualizar_sessao(sessao)
 
         treino = self.treino_service.obter_treino_por_id(sessao.treino_id)
         return {
@@ -111,26 +142,26 @@ class CicloService:
             "treino_id": sessao.treino_id,
             "treino_nome": treino.nome if treino else None,
             "treino_descricao": treino.descricao if treino else None,
+            "status": sessao.status,
+            "data_inicio_execucao": sessao.data_inicio_execucao.isoformat() if sessao.data_inicio_execucao else None,
         }
 
     def concluir_sessao(self, ciclo_sessao_id: str) -> CicloSessaoResponse:
-        """Marca uma sessão como concluída.
-
-        Se for a última sessão pendente, marca o ciclo como concluído também.
-        """
+        """Marca uma sessão como concluída."""
         sessao = self.sessao_repo.obter_sessao_por_id(ciclo_sessao_id)
         if not sessao:
             raise ValueError("Sessão não encontrada.")
-        if sessao.concluido:
+        if sessao.status == StatusCicloSessao.CONCLUIDA.value:
             raise ValueError("Sessão já foi concluída.")
 
-        sessao.concluido = True
+        sessao.status = StatusCicloSessao.CONCLUIDA.value
         sessao.data_conclusao = datetime.now(timezone.utc)
         resultado = CicloSessaoResponse.model_validate(self.sessao_repo.atualizar_sessao(sessao))
 
-        # Verifica se era a última sessão pendente
-        proxima = self.sessao_repo.obter_proxima_sessao(sessao.ciclo_id)
-        if proxima is None:
+        # Verifica se era a última sessão pendente (aguardando ou em_execucao)
+        proxima_aguardando = self.sessao_repo.obter_proxima_sessao(sessao.ciclo_id)
+        em_execucao = self.sessao_repo.obter_sessao_em_execucao(sessao.ciclo_id)
+        if proxima_aguardando is None and em_execucao is None:
             ciclo = self.ciclo_repo.obter_ciclo_por_id(sessao.ciclo_id)
             if ciclo and ciclo.status == StatusCiclo.ATIVO.value:
                 ciclo.status = StatusCiclo.CONCLUIDO.value
@@ -145,23 +176,13 @@ class CicloService:
             raise ValueError("Ciclo não encontrado.")
         sessoes = self.sessao_repo.listar_sessoes_por_ciclo(ciclo_id)
         total = len(sessoes)
-        concluidas = sum(1 for s in sessoes if s.concluido)
+        concluidas = sum(1 for s in sessoes if s.status == StatusCicloSessao.CONCLUIDA.value)
         percentual = round((concluidas / total * 100), 1) if total > 0 else 0.0
         return {
             "sessoes_concluidas": concluidas,
             "total_sessoes": total,
             "percentual_conclusao": percentual,
         }
-
-    def desativar_ciclo(self, ciclo_id: str) -> CicloResponse:
-        """Marca um ciclo como pausado, liberando o usuário para criar um novo ciclo ativo."""
-        ciclo = self.ciclo_repo.obter_ciclo_por_id(ciclo_id)
-        if not ciclo:
-            raise ValueError("Ciclo não encontrado.")
-        if ciclo.status == StatusCiclo.CONCLUIDO.value:
-            raise ValueError("Ciclo já está concluído e não pode ser desativado.")
-        ciclo.status = StatusCiclo.PAUSADO.value
-        return CicloResponse.model_validate(self.ciclo_repo.atualizar_ciclo(ciclo))
 
     def criar_ciclo_com_rotacao(
         self,
@@ -171,24 +192,16 @@ class CicloService:
         treino_ids: list[str],
         duracao_meses: int,
     ) -> dict:
-        """Cria um ciclo e popula as sessões automaticamente usando rotação de treinos.
-
-        Usa `usuario.meta_semanal_dias` para calcular o total de sessões.
-        A rotação continua de onde parou entre semanas — ex: ABCD → ABCD → ...
-
-        Returns dict com ciclo criado e total de sessões geradas.
-        """
+        """Cria um ciclo e popula as sessões automaticamente usando rotação de treinos."""
         if not treino_ids:
             raise ValueError("É necessário informar ao menos um treino para a rotação.")
         if duracao_meses < 1:
             raise ValueError("Duração deve ser de pelo menos 1 mês.")
 
-        # Valida todos os treinos antes de criar o ciclo
         for tid in treino_ids:
             if not self.treino_service.obter_treino_por_id(tid):
                 raise ValueError(f"Treino '{tid}' não encontrado.")
 
-        # Lê meta_semanal_dias do usuário
         usuario = self.usuario_service.obter_usuario_por_id(usuario_id)
         if not usuario:
             raise ValueError("Usuário não encontrado.")
@@ -199,10 +212,8 @@ class CicloService:
         semanas = duracao_meses * 4
         total_sessoes = semanas * dias_por_semana
 
-        # Cria o ciclo
         ciclo = self.criar_ciclo(usuario_id, nome, data_inicio)
 
-        # Popula sessões com rotação contínua
         n_treinos = len(treino_ids)
         for i in range(total_sessoes):
             treino_id = treino_ids[i % n_treinos]
@@ -212,7 +223,7 @@ class CicloService:
             "ciclo": ciclo.model_dump(),
             "total_sessoes": total_sessoes,
             "dias_por_semana": dias_por_semana,
-            "rotacao": [t for t in treino_ids],
+            "rotacao": list(treino_ids),
         }
 
     # ── Integração com treino do dia ───────────────────────────────────────
@@ -220,14 +231,45 @@ class CicloService:
     def obter_treino_do_dia(self, usuario_id: str) -> dict:
         """Retorna o treino do dia priorizando o ciclo ativo.
 
-        - Se há ciclo ativo com sessão pendente → {"fonte": "ciclo", ...}
-        - Caso contrário → delega para TreinoService → {"fonte": "dia_semana", ...}
+        Se há sessão 'em_execucao' de uma data anterior, sinaliza sessão em aberto.
+        Se há ciclo ativo → {"fonte": "ciclo", ...}
+        Caso contrário → {"fonte": "dia_semana", ...}
         """
+        ciclo = self.ciclo_repo.obter_ciclo_ativo_por_usuario(usuario_id)
+        if not ciclo:
+            treino_dia = self.treino_service.obter_treino_do_dia_por_usuario(usuario_id)
+            return {"fonte": "dia_semana", "treino": treino_dia}
+
+        # Verifica sessão em execução que pode ser de dia anterior
+        sessao_em_aberto = self.sessao_repo.obter_sessao_em_execucao(ciclo.id)
+        hoje = datetime.now(timezone.utc).date()
+
+        if sessao_em_aberto:
+            data_inicio = sessao_em_aberto.data_inicio_execucao
+            data_inicio_date = data_inicio.astimezone(timezone.utc).date() if data_inicio else None
+
+            if data_inicio_date and data_inicio_date < hoje:
+                # Sessão em aberto de dia anterior — alerta
+                treino = self.treino_service.obter_treino_por_id(sessao_em_aberto.treino_id)
+                return {
+                    "fonte": "ciclo",
+                    "sessao_em_aberto": True,
+                    "ciclo_sessao_id": sessao_em_aberto.id,
+                    "numero_sessao": sessao_em_aberto.numero_sessao,
+                    "data_inicio_execucao": data_inicio.isoformat() if data_inicio else None,
+                    "treino": {
+                        "id": sessao_em_aberto.treino_id,
+                        "nome": treino.nome if treino else None,
+                        "descricao": treino.descricao if treino else None,
+                    },
+                }
+
+        # Fluxo normal: pega próxima sessão (em_execucao de hoje ou aguardando)
         proxima = self.obter_proxima_sessao(usuario_id)
         if proxima:
-            treino = self.treino_service.obter_treino_por_id(proxima["treino_id"])
             return {
                 "fonte": "ciclo",
+                "sessao_em_aberto": False,
                 "ciclo_sessao_id": proxima["ciclo_sessao_id"],
                 "treino": {
                     "id": proxima["treino_id"],
@@ -237,7 +279,4 @@ class CicloService:
             }
 
         treino_dia = self.treino_service.obter_treino_do_dia_por_usuario(usuario_id)
-        return {
-            "fonte": "dia_semana",
-            "treino": treino_dia,
-        }
+        return {"fonte": "dia_semana", "treino": treino_dia}

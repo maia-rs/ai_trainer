@@ -121,7 +121,8 @@ def test_adicionar_sessao_ciclo_tool_retorna_sessao(monkeypatch):
                 ciclo_id=ciclo_id,
                 numero_sessao=numero_sessao,
                 treino_id=treino_id,
-                concluido=False,
+                status="aguardando",
+                data_inicio_execucao=None,
                 data_conclusao=None,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
@@ -137,7 +138,7 @@ def test_adicionar_sessao_ciclo_tool_retorna_sessao(monkeypatch):
     })
 
     assert resultado["id"] == "sessao-1"
-    assert resultado["concluido"] is False
+    assert resultado["status"] == "aguardando"
 
 
 def test_adicionar_sessao_ciclo_tool_retorna_erro(monkeypatch):
@@ -219,7 +220,8 @@ def test_concluir_sessao_tool_retorna_proxima_sessao(monkeypatch):
         ciclo_id="ciclo-1",
         numero_sessao=1,
         treino_id="treino-1",
-        concluido=True,
+        status="concluida",
+        data_inicio_execucao=datetime.now(timezone.utc),
         data_conclusao=datetime.now(timezone.utc),
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -266,7 +268,7 @@ def test_concluir_sessao_tool_retorna_proxima_sessao(monkeypatch):
 
     resultado = concluir_sessao_module.concluir_sessao.invoke({"ciclo_sessao_id": "sessao-1"})
 
-    assert resultado["sessao_concluida"]["concluido"] is True
+    assert resultado["sessao_concluida"]["status"] == "concluida"
     assert resultado["proxima_sessao"]["numero_sessao"] == 2
 
 

@@ -82,7 +82,7 @@ def test_adicionar_sessao_valida_retorna_response(db_session):
     assert sessao.ciclo_id == ciclo.id
     assert sessao.numero_sessao == 1
     assert sessao.treino_id == treino.id
-    assert sessao.concluido is False
+    assert sessao.status == "aguardando"
 
 
 def test_adicionar_sessao_ciclo_inexistente_lanca_value_error(db_session):
@@ -202,7 +202,7 @@ def test_concluir_sessao_valida(db_session):
     sessao = svc.adicionar_sessao(ciclo.id, 1, treino.id)
     resultado = svc.concluir_sessao(sessao.id)
 
-    assert resultado.concluido is True
+    assert resultado.status == "concluida"
     assert resultado.data_conclusao is not None
 
 

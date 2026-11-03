@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ciclo_sessao import CicloSessao
+from app.models.ciclo_sessao import CicloSessao, StatusCicloSessao
 
 
 class CicloSessaoRepositorio:
@@ -22,11 +22,22 @@ class CicloSessaoRepositorio:
         stmt = select(CicloSessao).where(CicloSessao.id == sessao_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def obter_sessao_em_execucao(self, ciclo_id: str) -> CicloSessao | None:
+        """Retorna a sessão com status='em_execucao', se existir."""
+        stmt = select(CicloSessao).where(
+            CicloSessao.ciclo_id == ciclo_id,
+            CicloSessao.status == StatusCicloSessao.EM_EXECUCAO.value,
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def obter_proxima_sessao(self, ciclo_id: str) -> CicloSessao | None:
-        """Retorna a próxima sessão pendente (menor numero_sessao não concluído)."""
+        """Retorna a próxima sessão aguardando (menor numero_sessao com status='aguardando')."""
         stmt = (
             select(CicloSessao)
-            .where(CicloSessao.ciclo_id == ciclo_id, CicloSessao.concluido == False)  # noqa: E712
+            .where(
+                CicloSessao.ciclo_id == ciclo_id,
+                CicloSessao.status == StatusCicloSessao.AGUARDANDO.value,
+            )
             .order_by(CicloSessao.numero_sessao.asc())
             .limit(1)
         )

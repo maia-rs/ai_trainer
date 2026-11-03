@@ -16,7 +16,7 @@ from app.tools.execucao.obter_historico_treino import obter_historico_treino
 from app.tools.execucao.obter_ultima_execucao import obter_ultima_execucao
 from app.tools.execucao.registrar_execucao_com_feedback import registrar_execucao_com_feedback
 from app.tools.execucao.registrar_execucao_treino import registrar_execucao_treino
-from app.tools.execucao.resumo_treino_hoje import resumo_treino_hoje
+from app.tools.execucao.resumo_treino import resumo_treino
 from app.tools.exercicio.buscar_informacoes_exercicio import buscar_informacoes_exercicio
 from app.tools.progresso.comparar_avaliacoes_fisicas import comparar_avaliacoes_fisicas
 from app.tools.progresso.obter_progresso import obter_progresso
@@ -55,7 +55,7 @@ def get_agent_tools() -> list:
         remover_exercicio_treino,
         registrar_execucao_treino,
         registrar_execucao_com_feedback,
-        resumo_treino_hoje,
+        resumo_treino,
         listar_execucoes_recentes,
         obter_ultima_execucao,
         obter_historico_treino,
